@@ -77,7 +77,7 @@
   <div class="row" style="margin-top:8px"><button id="btnHub">Activer le hub</button></div>
   <p class="mut">Le hub permet à l'Apple Watch de faire « next » et au LLM de pousser les
   drills à distance. Sans hub, tout marche en local avec les boutons ci-dessus.<br>
-  Watch Shortcut : <code>PUT &lt;url&gt;/command.json?auth=&lt;token&gt;</code> corps <code>"next"</code>.</p>
+  Watch Shortcut : <code>PUT &lt;url&gt;/command.json</code>, corps <b>JSON</b> <code>{"cmd":"next"}</code>.</p>
 </details>
 
 <div class="card">
@@ -231,11 +231,13 @@ const HUB={url:"",tok:"",iv:null,lastCmd:"",
  q(path){return this.url+"/"+path+".json"+(this.tok?("?auth="+encodeURIComponent(this.tok)):"");},
  async put(path,val){try{await fetch(this.q(path),{method:"PUT",body:JSON.stringify(val)});}catch(e){}},
  async poll(){try{
-   const c=await(await fetch(this.q("command"),{cache:"no-store"})).json();
+   const raw=await(await fetch(this.q("command"),{cache:"no-store"})).json();
+   const c=(raw&&typeof raw==="object")?raw.cmd:raw;   // accepte {"cmd":"next"} ou "next"
    if(c&&c!==this.lastCmd){this.lastCmd=c;log("hub command: "+c);
      if(c==="next")ENGINE.next();else if(c==="pause")ENGINE.pause();
      else if(c==="stop")ENGINE.stop();else if(c==="reload")pullDrills();
-     this.put("command","idle");}
+     else if(c==="play")ENGINE.next();
+     this.put("command",{cmd:"idle"});}
    }catch(e){}},
 };
 async function pullDrills(){try{const d=await(await fetch(HUB.q("drills"),{cache:"no-store"})).json();
