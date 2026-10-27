@@ -254,7 +254,9 @@ $("btnNext").onclick=()=>ENGINE.next();
 $("btnPause").onclick=()=>ENGINE.pause();
 $("btnStop").onclick=()=>ENGINE.stop();
 $("btnReload").onclick=()=>HUB.url?pullDrills():ENGINE.load($("drills").value);
-$("btnHub").onclick=()=>HUB.start($("hubUrl").value.trim(),$("hubTok").value.trim());
+$("btnHub").onclick=()=>{const u=$("hubUrl").value.trim(),t=$("hubTok").value.trim();
+  try{localStorage.setItem("cc_hubUrl",u);localStorage.setItem("cc_hubTok",t);}catch(e){}
+  HUB.start(u,t);};
 
 /* drills d'exemple */
 $("drills").value=JSON.stringify({name:"Séance demo",drills:[
@@ -265,6 +267,10 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
 log("Prêt. Connecte le robot, charge des drills, puis ▶︎ Next. (dry-run par défaut.)");
+/* restaure le hub mémorisé (URL saisie une seule fois) */
+try{const u=localStorage.getItem("cc_hubUrl");if(u){$("hubUrl").value=u;
+  $("hubTok").value=localStorage.getItem("cc_hubTok")||"";HUB.start(u,$("hubTok").value);
+  log("Hub restauré automatiquement.","ok");}}catch(e){}
 </script>
 </body>
 </html>
