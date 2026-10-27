@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Court Coach</title>
+<style>
+  :root { --bg:#0e1116; --card:#171c24; --fg:#e6edf3; --mut:#8b97a7; --acc:#3fb950;
+          --warn:#d29922; --err:#f85149; --line:#242c38; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:15px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif; padding:12px 16px 40px; }
+  h1 { font-size:18px; margin:4px 0 12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:14px; margin-bottom:12px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; }
+  button { flex:1 1 auto; min-width:90px; padding:14px 10px; font-size:16px; font-weight:600;
+           border:none; border-radius:10px; background:#222b38; color:var(--fg); }
+  button:active { filter:brightness(1.3); }
+  button.primary { background:var(--acc); color:#06210d; }
+  button.big { flex-basis:100%; padding:20px; font-size:20px; }
+  button:disabled { opacity:.4; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+  .s-idle{background:#30363d;color:var(--mut)} .s-playing{background:var(--acc);color:#06210d}
+  .s-waiting{background:var(--warn);color:#2a1d00} .s-paused{background:#30363d;color:var(--fg)}
+  .s-off{background:var(--err);color:#2a0607}
+  label { color:var(--mut); font-size:12px; display:block; margin:8px 0 3px; }
+  input, textarea { width:100%; background:#0e141c; color:var(--fg); border:1px solid var(--line);
+                    border-radius:8px; padding:9px; font:13px ui-monospace,Menlo,monospace; }
+  textarea { height:160px; resize:vertical; }
+  .mut { color:var(--mut); font-size:13px; }
+  .big-status { font-size:22px; font-weight:800; margin:2px 0; }
+  #log { height:150px; overflow:auto; background:#0b0f14; border:1px solid var(--line);
+         border-radius:8px; padding:8px; font:11px/1.35 ui-monospace,Menlo,monospace; color:#9fb0c3; }
+  details summary { cursor:pointer; color:var(--mut); }
+  .warn { color:var(--warn); } .err { color:var(--err); } .ok { color:var(--acc); }
+</style>
+</head>
+<body>
+<h1>🎾 Court Coach <span id="state" class="pill s-off">déconnecté</span></h1>
+
+<div class="card">
+  <div class="big-status" id="drillName">—</div>
+  <div class="mut" id="ballInfo">aucune session chargée</div>
+  <div class="row" style="margin-top:12px">
+    <button id="btnNext" class="primary big" disabled>▶︎ Next drill</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button id="btnPause" disabled>⏸ Pause</button>
+    <button id="btnStop" disabled>⏹ Stop</button>
+    <button id="btnReload" disabled>⟳ Reload drills</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row">
+    <button id="btnConnect" class="primary">🔌 Connecter le robot</button>
+  </div>
+  <div class="mut" id="dev" style="margin-top:8px">Non connecté. (HTTPS + Bluefy/Chrome requis.)</div>
+  <label style="margin-top:10px"><input type="checkbox" id="dry" checked style="width:auto"> Mode dry-run (ne tire pas — log seulement)</label>
+</div>
+
+<div class="card">
+  <label>Drills (session JSON) — collés par toi ou poussés par le LLM</label>
+  <textarea id="drills" spellcheck="false"></textarea>
+  <div class="row" style="margin-top:8px">
+    <button id="btnLoad">Charger ce JSON</button>
+  </div>
+</div>
+
+<details class="card">
+  <summary>⚙️ Hub (Firebase) & aide</summary>
+  <label>URL Realtime Database (ex. https://xxx.firebaseio.com)</label>
+  <input id="hubUrl" placeholder="(vide = mode local, boutons seulement)">
+  <label>Token / secret (auth=…)</label>
+  <input id="hubTok" placeholder="(optionnel selon tes règles)">
+  <div class="row" style="margin-top:8px"><button id="btnHub">Activer le hub</button></div>
+  <p class="mut">Le hub permet à l'Apple Watch de faire « next » et au LLM de pousser les
+  drills à distance. Sans hub, tout marche en local avec les boutons ci-dessus.<br>
+  Watch Shortcut : <code>PUT &lt;url&gt;/command.json?auth=&lt;token&gt;</code> corps <code>"next"</code>.</p>
+</details>
+
+<div class="card">
+  <label>Journal</label>
+  <div id="log"></div>
+</div>
+
+<script>
+/* ===== MD5 (blueimp, compact, ASCII/UTF-8) ===== */
+var md5=(function(){function s(n,t){return n<<t|n>>>32-t}function a(n,t){var r,e,o,u,c;
+return o=2147483648&n,u=2147483648&t,r=1073741824&n,e=1073741824&t,c=(1073741823&n)+(1073741823&t),
+r&e?2147483648^c^o^u:r|e?1073741824&c?3221225472^c^o^u:1073741824^c^o^u:c^o^u}
+function f(n,t,r){return n&t|~n&r}function g(n,t,r){return n&r|t&~r}function h(n,t,r){return n^t^r}
+function i(n,t,r){return t^(n|~r)}function j(n,t,r,e,o,u,c){return n=a(n,a(a(f(t,r,e),o),c)),a(s(n,u),t)}
+function k(n,t,r,e,o,u,c){return n=a(n,a(a(g(t,r,e),o),c)),a(s(n,u),t)}
+function l(n,t,r,e,o,u,c){return n=a(n,a(a(h(t,r,e),o),c)),a(s(n,u),t)}
+function m(n,t,r,e,o,u,c){return n=a(n,a(a(i(t,r,e),o),c)),a(s(n,u),t)}
+function o(n){for(var t,r=n.length,e=r+8,o=16*((e-e%64)/64+1),u=Array(o-1),c=0,d=0;d<r;)
+t=(d-d%4)/4,c=d%4*8,u[t]=u[t]|n.charCodeAt(d)<<c,d++;return t=(d-d%4)/4,c=d%4*8,
+u[t]=u[t]|128<<c,u[o-2]=r<<3,u[o-1]=r>>>29,u}
+function p(n){var t,r="",e="";for(t=0;t<=3;t++)e=n>>>8*t&255,r+=("0"+e.toString(16)).slice(-2);return r}
+function q(n){n=n.replace(/\r\n/g,"\n");for(var t="",r=0;r<n.length;r++){var e=n.charCodeAt(r);
+e<128?t+=String.fromCharCode(e):e>127&&e<2048?(t+=String.fromCharCode(e>>6|192),
+t+=String.fromCharCode(63&e|128)):(t+=String.fromCharCode(e>>12|224),
+t+=String.fromCharCode(e>>6&63|128),t+=String.fromCharCode(63&e|128))}return t}
+return function(n){var t,r,e,u,c,d,f,g,h,i=[];for(n=q(n),i=o(n),d=1732584193,f=4023233417,
+g=2562383102,h=271733878,t=0;t<i.length;t+=16)r=d,e=f,u=g,c=h,d=j(d,f,g,h,i[t],7,3614090360),
+h=j(h,d,f,g,i[t+1],12,3905402710),g=j(g,h,d,f,i[t+2],17,606105819),f=j(f,g,h,d,i[t+3],22,3250441966),
+d=j(d,f,g,h,i[t+4],7,4118548399),h=j(h,d,f,g,i[t+5],12,1200080426),g=j(g,h,d,f,i[t+6],17,2821735955),
+f=j(f,g,h,d,i[t+7],22,4249261313),d=j(d,f,g,h,i[t+8],7,1770035416),h=j(h,d,f,g,i[t+9],12,2336552879),
+g=j(g,h,d,f,i[t+10],17,4294925233),f=j(f,g,h,d,i[t+11],22,2304563134),d=j(d,f,g,h,i[t+12],7,1804603682),
+h=j(h,d,f,g,i[t+13],12,4254626195),g=j(g,h,d,f,i[t+14],17,2792965006),f=j(f,g,h,d,i[t+15],22,1236535329),
+d=k(d,f,g,h,i[t+1],5,4129170786),h=k(h,d,f,g,i[t+6],9,3225465664),g=k(g,h,d,f,i[t+11],14,643717713),
+f=k(f,g,h,d,i[t],20,3921069994),d=k(d,f,g,h,i[t+5],5,3593408605),h=k(h,d,f,g,i[t+10],9,38016083),
+g=k(g,h,d,f,i[t+15],14,3634488961),f=k(f,g,h,d,i[t+4],20,3889429448),d=k(d,f,g,h,i[t+9],5,568446438),
+h=k(h,d,f,g,i[t+14],9,3275163606),g=k(g,h,d,f,i[t+3],14,4107603335),f=k(f,g,h,d,i[t+8],20,1163531501),
+d=k(d,f,g,h,i[t+13],5,2850285829),h=k(h,d,f,g,i[t+2],9,4243563512),g=k(g,h,d,f,i[t+7],14,1735328473),
+f=k(f,g,h,d,i[t+12],20,2368359562),d=l(d,f,g,h,i[t+5],4,4294588738),h=l(h,d,f,g,i[t+8],11,2272392833),
+g=l(g,h,d,f,i[t+11],16,1839030562),f=l(f,g,h,d,i[t+14],23,4259657740),d=l(d,f,g,h,i[t+1],4,2763975236),
+h=l(h,d,f,g,i[t+4],11,1272893353),g=l(g,h,d,f,i[t+7],16,4139469664),f=l(f,g,h,d,i[t+10],23,3200236656),
+d=l(d,f,g,h,i[t+13],4,681279174),h=l(h,d,f,g,i[t],11,3936430074),g=l(g,h,d,f,i[t+3],16,3572445317),
+f=l(f,g,h,d,i[t+6],23,76029189),d=l(d,f,g,h,i[t+9],4,3654602809),h=l(h,d,f,g,i[t+12],11,3873151461),
+g=l(g,h,d,f,i[t+15],16,530742520),f=l(f,g,h,d,i[t+2],23,3299628645),d=m(d,f,g,h,i[t],6,4096336452),
+h=m(h,d,f,g,i[t+7],10,1126891415),g=m(g,h,d,f,i[t+14],15,2878612391),f=m(f,g,h,d,i[t+5],21,4237533241),
+d=m(d,f,g,h,i[t+12],6,1700485571),h=m(h,d,f,g,i[t+3],10,2399980690),g=m(g,h,d,f,i[t+10],15,4293915773),
+f=m(f,g,h,d,i[t+1],21,2240044497),d=m(d,f,g,h,i[t+8],6,1873313359),h=m(h,d,f,g,i[t+15],10,4264355552),
+g=m(g,h,d,f,i[t+6],15,2734768916),f=m(f,g,h,d,i[t+13],21,1309151649),d=m(d,f,g,h,i[t+4],6,4149444226),
+h=m(h,d,f,g,i[t+11],10,3174756917),g=m(g,h,d,f,i[t+2],15,718787259),f=m(f,g,h,d,i[t+9],21,3951481745),
+d=a(d,r),f=a(f,e),g=a(g,u),h=a(h,c);return(p(d)+p(f)+p(g)+p(h)).toLowerCase()}})();
+
+/* ===== Protocole robot (vérifié) ===== */
+const SERVICE="02f00000-0000-0000-0000-00000000ffe0";
+const CH_WRITE="02f00000-0000-0000-0000-00000000ff01";
+const CH_NOTIFY="02f00000-0000-0000-0000-00000000ff02";
+const SCR_TABLE="Mjgx1jAwXDBaMFcxCz3JBgNVBAYT4kJF7Rkw"; // scramble (36)
+const SPIN={flat:0,topspin:1,backspin:2,0:0,1:1,2:2};
+
+function crc16(bytes){let c=0xFFFF;for(const b of bytes){c^=b;for(let i=0;i<8;i++)c=(c&1)?(c>>>1)^0xA001:c>>>1;}return c&0xFFFF;}
+function buildFrame(op,data=[]){const payload=[op,data.length&0xff,(data.length>>8)&0xff,...data];
+  const len=payload.length+2;const inner=[len&0xff,(len>>8)&0xff,...payload];const c=crc16(inner);
+  return Uint8Array.from([0x41,0x14,...inner,c&0xff,(c>>8)&0xff]);}
+function parseRx(f){if(f.length<8||f[0]!==0x45||f[1]!==0x54)return null;const inner=f.slice(2,-2);
+  if(crc16(inner)!==(f[f.length-2]|f[f.length-1]<<8))return null;
+  const status=inner[2],op=inner[3],dl=inner[4]|inner[5]<<8;return{op,status,data:inner.slice(6,6+dl)};}
+function scramble(str){let o="";for(let i=0;i<str.length;i++)o+=SCR_TABLE[str.charCodeAt(i)%36];return o;}
+function handshakeKey(sn,code){return md5(sn+scramble(sn)+code);} // MD5(sn+scramble(sn)+code)
+
+/* ===== UI helpers ===== */
+const $=id=>document.getElementById(id);
+function log(m,cls){const d=$("log");const t=new Date().toLocaleTimeString();
+  d.innerHTML+=`<div class="${cls||''}">${t} ${m}</div>`;d.scrollTop=d.scrollHeight;}
+function setState(s){const map={idle:["s-idle","idle"],playing:["s-playing","en cours"],
+  waiting:["s-waiting","attente (tap next)"],paused:["s-paused","pause"],off:["s-off","déconnecté"]};
+  const[c,t]=map[s]||map.off;const e=$("state");e.className="pill "+c;e.textContent=t;ENGINE.state=s;
+  if(HUB.url)HUB.put("status",{state:s,drill:ENGINE.i,name:ENGINE.cur?.name||null});}
+
+/* ===== BLE ===== */
+const BLE={dev:null,wr:null,verified:false,rxbuf:[],
+ async connect(){
+   if(!navigator.bluetooth){log("Web Bluetooth indisponible (utilise Bluefy sur iOS, Chrome ailleurs, en HTTPS).","err");return;}
+   log("Scan PACE…");
+   this.dev=await navigator.bluetooth.requestDevice({filters:[{namePrefix:"PACE"}],optionalServices:[SERVICE]});
+   this.dev.addEventListener("gattserverdisconnected",()=>{setState("off");log("Robot déconnecté.","warn");});
+   const g=await this.dev.gatt.connect();const s=await g.getPrimaryService(SERVICE);
+   this.wr=await s.getCharacteristic(CH_WRITE);const n=await s.getCharacteristic(CH_NOTIFY);
+   await n.startNotifications();n.addEventListener("characteristicvaluechanged",e=>this.onNotify(new Uint8Array(e.target.value.buffer)));
+   $("dev").textContent="Connecté : "+(this.dev.name||this.dev.id);log("Connecté + notify abonné.","ok");
+   await this.send(0x07); // handshake challenge
+   keepAwake();
+ },
+ async send(op,data=[]){const f=buildFrame(op,data);for(let k=0;k<f.length;k+=252)
+   await this.wr.writeValueWithResponse(f.slice(k,k+252));},
+ onNotify(bytes){this.rxbuf.push(...bytes);
+   // extraction trame RX (45 54)
+   while(true){const j=this.rxbuf.findIndex((b,k)=>b===0x45&&this.rxbuf[k+1]===0x54);
+     if(j<0||this.rxbuf.length<j+4)break;const len=this.rxbuf[j+2]|this.rxbuf[j+3]<<8;const tot=4+len;
+     if(j+tot>this.rxbuf.length)break;const raw=Uint8Array.from(this.rxbuf.slice(j,j+tot));
+     this.rxbuf.splice(0,j+tot);const r=parseRx(raw);if(!r)continue;
+     if(r.op===0x07)this.onChallenge(r.data);}
+ },
+ onChallenge(d){try{const snL=d[0],cL=d[1];
+   const sn=new TextDecoder().decode(d.slice(2,2+snL));
+   const code=new TextDecoder().decode(d.slice(2+snL,2+snL+cL));
+   const key=handshakeKey(sn,code);log("challenge sn="+sn+" → clé "+key.slice(0,8)+"…","ok");
+   this.send(0x08,[...new TextEncoder().encode(key)]).then(()=>{this.verified=true;
+     log("handshake envoyé ✔","ok");enableControls();});
+ }catch(e){log("challenge illisible: "+e,"err");}}
+};
+
+/* ===== Moteur de session ===== */
+const ENGINE={session:null,i:-1,cur:null,state:"off",timer:null,
+ load(json){try{const s=typeof json==="string"?JSON.parse(json):json;
+   if(!s.drills||!Array.isArray(s.drills))throw"pas de 'drills'";this.session=s;this.i=-1;
+   $("drillName").textContent=s.name||"Session";
+   $("ballInfo").textContent=s.drills.length+" drills prêts";
+   enableControls();setState(BLE.verified?"waiting":"idle");
+   log("Session chargée: "+s.drills.length+" drills.","ok");}catch(e){log("JSON invalide: "+e,"err");}},
+ async next(){if(!this.session)return;if(this.state==="playing")return;
+   this.i++;if(this.i>=this.session.drills.length){log("Session terminée.","ok");setState("idle");this.i=-1;return;}
+   this.cur=this.session.drills[this.i];await this.playDrill(this.cur);},
+ async playDrill(d){setState("playing");$("drillName").textContent=d.name||("Drill "+(this.i+1));
+   const reps=d.repeat||1;
+   for(let r=0;r<reps;r++){for(let b=0;b<d.balls.length;b++){
+     if(this.state!=="playing"){log("interrompu");return;}
+     const ball=d.balls[b];$("ballInfo").textContent=`balle ${b+1}/${d.balls.length}`+(reps>1?` (rep ${r+1}/${reps})`:"");
+     await fireBall(ball);
+     await sleep((ball.interval_s??3)*1000);
+   }}
+   log("Drill fini — pause "+(d.pause_after_s??0)+"s puis WAITING.");
+   await sleep((d.pause_after_s??0)*1000);
+   setState("waiting");$("ballInfo").textContent="tape ▶︎ Next drill";},
+ pause(){if(this.state==="playing"){setState("paused");log("pause");}},
+ stop(){this.state="idle";this.i=-1;setState("idle");$("ballInfo").textContent="stop";log("stop");}
+};
+const sleep=ms=>new Promise(r=>{ENGINE.timer=setTimeout(r,ms);});
+
+/* ===== SEAM : tir d'une balle (format d'octets à brancher après capture) ===== */
+async function fireBall(ball){
+  const p=`speed=${ball.speed} arc=${ball.arc} spin=${ball.spin} rot=${ball.rotationSpeed} drop=${ball.dropPoint}`;
+  if($("dry").checked||!BLE.verified){log("DRY fireBall("+p+")");return;}
+  // TODO: encoder les 24 octets + opcode (0x80/0x81 ou 0x46) une fois la capture faite,
+  //       puis: await BLE.send(OPCODE, bytes);
+  log("fireBall("+p+") — format réel non branché (fais une capture).","warn");
+}
+
+/* ===== Hub (Firebase RTDB en REST, poll 1s) ===== */
+const HUB={url:"",tok:"",iv:null,lastCmd:"",
+ start(url,tok){this.url=url.replace(/\/$/,"");this.tok=tok;clearInterval(this.iv);
+   if(!this.url){log("Hub désactivé (mode local).");return;}
+   this.iv=setInterval(()=>this.poll(),1000);log("Hub activé: "+this.url,"ok");},
+ q(path){return this.url+"/"+path+".json"+(this.tok?("?auth="+encodeURIComponent(this.tok)):"");},
+ async put(path,val){try{await fetch(this.q(path),{method:"PUT",body:JSON.stringify(val)});}catch(e){}},
+ async poll(){try{
+   const c=await(await fetch(this.q("command"),{cache:"no-store"})).json();
+   if(c&&c!==this.lastCmd){this.lastCmd=c;log("hub command: "+c);
+     if(c==="next")ENGINE.next();else if(c==="pause")ENGINE.pause();
+     else if(c==="stop")ENGINE.stop();else if(c==="reload")pullDrills();
+     this.put("command","idle");}
+   }catch(e){}},
+};
+async function pullDrills(){try{const d=await(await fetch(HUB.q("drills"),{cache:"no-store"})).json();
+  if(d){$("drills").value=JSON.stringify(d,null,2);ENGINE.load(d);}}catch(e){log("pull drills: "+e,"err");}}
+
+/* ===== wake lock ===== */
+let _wl=null;async function keepAwake(){try{_wl=await navigator.wakeLock.request("screen");
+  document.addEventListener("visibilitychange",async()=>{if(_wl!==null&&document.visibilityState==="visible")_wl=await navigator.wakeLock.request("screen");});}catch(e){}}
+
+/* ===== câblage UI ===== */
+function enableControls(){["btnNext","btnPause","btnStop","btnReload"].forEach(id=>$(id).disabled=false);
+  if(ENGINE.session)setState("waiting");}
+$("btnConnect").onclick=()=>BLE.connect().catch(e=>log("connexion: "+e,"err"));
+$("btnLoad").onclick=()=>ENGINE.load($("drills").value);
+$("btnNext").onclick=()=>ENGINE.next();
+$("btnPause").onclick=()=>ENGINE.pause();
+$("btnStop").onclick=()=>ENGINE.stop();
+$("btnReload").onclick=()=>HUB.url?pullDrills():ENGINE.load($("drills").value);
+$("btnHub").onclick=()=>HUB.start($("hubUrl").value.trim(),$("hubTok").value.trim());
+
+/* drills d'exemple */
+$("drills").value=JSON.stringify({name:"Séance demo",drills:[
+ {name:"Warm-up CD croisé",repeat:1,pause_after_s:15,balls:[
+   {speed:5,arc:30,spin:"topspin",rotationSpeed:2,dropPoint:5,interval_s:3,tag:"forehand"},
+   {speed:5,arc:30,spin:"topspin",rotationSpeed:2,dropPoint:5,interval_s:3,tag:"forehand"}]},
+ {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
+   {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
+]},null,2);
+log("Prêt. Connecte le robot, charge des drills, puis ▶︎ Next. (dry-run par défaut.)");
+</script>
+</body>
+</html>
