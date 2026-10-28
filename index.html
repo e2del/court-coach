@@ -100,8 +100,13 @@
 </details>
 
 <div class="card">
-  <label>Journal</label>
+  <label>Journal <span class="mut" id="logCount"></span></label>
   <div id="log"></div>
+  <div class="row" style="margin-top:8px">
+    <button id="btnLogCopy">📋 Copier</button>
+    <button id="btnLogExport">⬇︎ Exporter</button>
+    <button id="btnLogClear">🗑 Vider</button>
+  </div>
 </div>
 
 <script>
@@ -166,8 +171,30 @@ function handshakeKey(sn,code){return md5(sn+scramble(sn)+code);} // MD5(sn+scra
 
 /* ===== UI helpers ===== */
 const $=id=>document.getElementById(id);
-function log(m,cls){const d=$("log");const t=new Date().toLocaleTimeString();
-  d.innerHTML+=`<div class="${cls||''}">${t} ${m}</div>`;d.scrollTop=d.scrollHeight;}
+const LOG={key:"cc_log",max:1200,lines:[],t:null,
+ load(){try{const r=localStorage.getItem(this.key);this.lines=r?JSON.parse(r):[];}catch(e){this.lines=[];}},
+ save(){clearTimeout(this.t);this.t=setTimeout(()=>{try{localStorage.setItem(this.key,JSON.stringify(this.lines));}catch(e){}},400);},
+ push(t,m,cls){this.lines.push({t,m,cls:cls||""});
+   if(this.lines.length>this.max)this.lines.splice(0,this.lines.length-this.max);  // logrotate
+   this.save();this.count();},
+ render(){const d=$("log");if(d){d.innerHTML=this.lines.map(l=>`<div class="${l.cls}">${l.t} ${l.m}</div>`).join("");d.scrollTop=d.scrollHeight;}this.count();},
+ count(){const c=$("logCount");if(c)c.textContent="("+this.lines.length+"/"+this.max+")";},
+ text(){return this.lines.map(l=>l.t+" "+l.m).join("\n");},
+ clear(){this.lines=[];this.save();this.render();},
+ async copy(){const txt=this.text();
+   try{await navigator.clipboard.writeText(txt);log("journal copié ("+this.lines.length+" lignes).","ok");}
+   catch(e){const ta=document.createElement("textarea");ta.value=txt;ta.style.position="fixed";ta.style.opacity="0";
+     document.body.appendChild(ta);ta.focus();ta.select();
+     try{document.execCommand("copy");log("journal copié.","ok");}catch(_){log("copie impossible — exporte le .txt.","warn");}
+     ta.remove();}},
+ export(){try{const blob=new Blob([this.text()],{type:"text/plain"});const a=document.createElement("a");
+   a.href=URL.createObjectURL(blob);
+   a.download="court-coach-log-"+new Date().toISOString().slice(0,19).replace(/[:T]/g,"-")+".txt";
+   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+   log("journal exporté.","ok");}catch(e){log("export impossible : "+e,"warn");}}
+};
+function log(m,cls){const t=new Date().toLocaleTimeString();LOG.push(t,m,cls);
+  const d=$("log");if(d){d.innerHTML+=`<div class="${cls||''}">${t} ${m}</div>`;d.scrollTop=d.scrollHeight;}}
 function setState(s){const map={idle:["s-idle","idle"],playing:["s-playing","en cours"],
   waiting:["s-waiting","attente (tap next)"],paused:["s-paused","pause"],off:["s-off","déconnecté"]};
   const[c,t]=map[s]||map.off;const e=$("state");e.className="pill "+c;e.textContent=t;ENGINE.state=s;
@@ -460,6 +487,9 @@ $("btnPause").onclick=()=>ENGINE.pause();
 $("btnStop").onclick=()=>ENGINE.stop();
 $("btnMotor").onclick=()=>motorOn();
 $("btnTest").onclick=()=>testFire();
+$("btnLogCopy").onclick=()=>LOG.copy();
+$("btnLogExport").onclick=()=>LOG.export();
+$("btnLogClear").onclick=()=>{if(confirm("Vider le journal ?"))LOG.clear();};
 $("btnReload").onclick=()=>HUB.url?pullDrills():ENGINE.load($("drills").value);
 $("btnHub").onclick=()=>{const u=$("hubUrl").value.trim(),t=$("hubTok").value.trim();
   try{localStorage.setItem("cc_hubUrl",u);localStorage.setItem("cc_hubTok",t);}catch(e){}
@@ -473,8 +503,10 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v1.4 · 2026-10-28";   // bump à chaque modif
+const APP_VERSION="v1.5 · 2026-10-28";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
+LOG.load(); LOG.render();
+log("───── session "+new Date().toLocaleString()+" ─────");
 log("Court Coach "+APP_VERSION+" — prêt. Connecte le robot, charge des drills, puis ▶︎ Next.");
 /* restaure le hub mémorisé (URL saisie une seule fois) */
 try{const u=localStorage.getItem("cc_hubUrl");if(u){$("hubUrl").value=u;
