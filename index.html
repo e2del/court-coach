@@ -335,6 +335,24 @@ const ENGINE={session:null,i:-1,cur:null,state:"off",timer:null,
 const sleep=ms=>new Promise(r=>{ENGINE.timer=setTimeout(r,ms);});
 
 /* ===== SEAM : tir d'une balle (format d'octets à brancher après capture) ===== */
+// --- encodage trame 0x81 depuis les paramètres du drill (formule calibrée) ---
+const _cl=(v,a,b)=>Math.max(a,Math.min(b,v));
+function _f32(v){const b=new ArrayBuffer(4);new DataView(b).setFloat32(0,v,true);return [...new Uint8Array(b)];}
+function _i32(v){const b=new ArrayBuffer(4);new DataView(b).setInt32(0,v|0,true);return [...new Uint8Array(b)];}
+function buildFire(ball,posOffset=0){
+  const speed=_cl(Number(ball.speed)||0,0,13);
+  const rot  =_cl(Number(ball.rotationSpeed)||0,0,8);
+  const arc  =_cl(Number(ball.arc)||0,0,100);          // = "Depth" (0..100)
+  const drop =_cl(Number(ball.dropPoint)||0,-10,10);
+  const feed =_cl(Number(ball.interval_s)||3,1.5,12);
+  const sens = ball.spin==="topspin"?1 : (ball.spin==="backspin"||ball.spin==="underspin")?-1 : 0;
+  const base = Math.round(1151+329*speed);
+  const delta= Math.round(209*rot);
+  const up=base+sens*delta, down=base-sens*delta;
+  const angle=10+0.4*arc, yaw=1.7*drop+posOffset;
+  return [0x02,0x01,0x00,0x00, ..._f32(5.0), 0x03,
+          ..._i32(up), ..._i32(down), ..._f32(angle), ..._f32(yaw), ..._f32(feed), ..._i32(1)];
+}
 async function fireBall(ball){
   const p=`speed=${ball.speed} arc=${ball.arc} spin=${ball.spin} rot=${ball.rotationSpeed} drop=${ball.dropPoint}`;
   if($("dry").checked||!BLE.verified){log("DRY fireBall("+p+")");return;}
@@ -342,9 +360,10 @@ async function fireBall(ball){
   const ready=await BOT.waitReady(8000);
   if(!ready){log("⚠️ Robot pas prêt (état "+BOT.state+") — tir sauté.","err");return;}
   try{
-    // TODO: payload réel 0x81 une fois la formule RPM branchée :
-    //   BOT.serving=true; await BLE.send(0x81, bytes);
-    log("fireBall("+p+") — payload réel non branché (en attente de la formule RPM).","warn");
+    const bytes=buildFire(ball);
+    log("🎾 TIR 0x81 ["+p+"] → "+bytes.map(b=>b.toString(16).padStart(2,"0")).join(""));
+    BOT.serving=true; BOT.missing=false;
+    await BLE.send(0x81,bytes);
   }catch(e){ log("⚠️ Tir échoué (BLE) : "+e+" — séance en pause.","err"); ENGINE.pause(); }
 }
 
@@ -517,7 +536,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v1.7 · 2026-10-28";   // bump à chaque modif
+const APP_VERSION="v1.8 · 2026-10-28";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
