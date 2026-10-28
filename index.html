@@ -54,6 +54,13 @@
     <button id="btnStop" disabled>⏹ Stop</button>
     <button id="btnReload" disabled>⟳ Reload drills</button>
   </div>
+  <label style="margin-top:10px"><input type="checkbox" id="calib" style="width:auto"> Mode calibration (attendre mon verdict après chaque balle)</label>
+  <div class="row" id="verdictRow" style="margin-top:8px;display:none">
+    <button id="vGood">✅ Bonne</button>
+    <button id="vNet">❌ Filet</button>
+    <button id="vLong">❌ Longue</button>
+    <button id="vWide">❌ Large</button>
+  </div>
 </div>
 
 <div class="card">
@@ -322,15 +329,25 @@ const ENGINE={session:null,i:-1,cur:null,state:"off",timer:null,
      // espacement : en live on attend la fin du tir (notif retour "prêt", état 3) avant
      // l'intervalle ; en dry/local on retombe sur le délai configuré.
      if(!$("dry").checked&&BLE.verified) await BOT.waitReady(10000);
-     await sleep((ball.interval_s??3)*1000);
+     if($("calib").checked){ await this.awaitVerdict(ball); await sleep(300); }
+     else await sleep((ball.interval_s??3)*1000);
    }}
    log("Drill fini — pause "+(d.pause_after_s??0)+"s puis WAITING.");
    await sleep((d.pause_after_s??0)*1000);
    setState("waiting");$("ballInfo").textContent="tape ▶︎ Next drill";
    const nx=this.session&&this.session.drills[this.i+1];
    if(nx)renderCourt(nx,"À suivre — "+(nx.name||"Drill "+(this.i+2)));},
- pause(){if(this.state==="playing"){setState("paused");log("pause");}},
- stop(){this.state="idle";this.i=-1;setState("idle");$("ballInfo").textContent="stop";log("stop");}
+ pause(){if(this._verdict)this._verdict("—");if(this.state==="playing"){setState("paused");log("pause");}},
+ stop(){if(this._verdict)this._verdict("—");this.state="idle";this.i=-1;setState("idle");$("ballInfo").textContent="stop";log("stop");},
+ _verdict:null,
+ awaitVerdict(ball){const row=$("verdictRow");if(row)row.style.display="flex";
+   const lbl=ball.tag||("speed"+ball.speed+" arc"+ball.arc+" drop"+ball.dropPoint);
+   $("ballInfo").textContent="verdict ? ✅ / ❌";
+   log("… verdict attendu — balle ["+lbl+"]","warn");
+   return new Promise(res=>{this._verdict=(v)=>{this._verdict=null;if(row)row.style.display="none";
+     if(v!=="—")log("VERDICT ["+lbl+"] = "+v,v==="bonne"?"ok":"err");
+     res(v);};});},
+ verdict(v){if(this._verdict)this._verdict(v);}
 };
 const sleep=ms=>new Promise(r=>{ENGINE.timer=setTimeout(r,ms);});
 
@@ -534,6 +551,10 @@ $("btnTest").onclick=()=>testFire();
 $("btnLogCopy").onclick=()=>LOG.copy();
 $("btnLogExport").onclick=()=>LOG.export();
 $("btnLogClear").onclick=()=>{if(confirm("Vider le journal ?"))LOG.clear();};
+$("vGood").onclick=()=>ENGINE.verdict("bonne");
+$("vNet").onclick=()=>ENGINE.verdict("filet");
+$("vLong").onclick=()=>ENGINE.verdict("longue");
+$("vWide").onclick=()=>ENGINE.verdict("large");
 $("btnReload").onclick=()=>HUB.url?pullDrills():ENGINE.load($("drills").value);
 $("btnHub").onclick=()=>{const u=$("hubUrl").value.trim(),t=$("hubTok").value.trim();
   try{localStorage.setItem("cc_hubUrl",u);localStorage.setItem("cc_hubTok",t);}catch(e){}
@@ -547,7 +568,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v1.9 · 2026-10-28";   // bump à chaque modif
+const APP_VERSION="v2.0 · 2026-10-28";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
