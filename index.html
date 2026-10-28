@@ -144,7 +144,7 @@ h=m(h,d,f,g,i[t+11],10,3174756917),g=m(g,h,d,f,i[t+2],15,718787259),f=m(f,g,h,d,
 d=a(d,r),f=a(f,e),g=a(g,u),h=a(h,c);return(p(d)+p(f)+p(g)+p(h)).toLowerCase()}})();
 
 /* ===== Protocole robot (vérifié) ===== */
-const SERVICE="02f00000-0000-0000-0000-00000000ffe0";
+const SERVICE="02f00000-0000-0000-0000-00000000fe00";  // service réel (vérifié GATT live)
 const CH_WRITE="02f00000-0000-0000-0000-00000000ff01";
 const CH_NOTIFY="02f00000-0000-0000-0000-00000000ff02";
 const SCR_TABLE="Mjgx1jAwXDBaMFcxCz3JBgNVBAYT4kJF7Rkw"; // scramble (36)
@@ -387,7 +387,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v1.0 · 2026-10-28";   // bump à chaque modif
+const APP_VERSION="v1.1 · 2026-10-28";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 log("Court Coach "+APP_VERSION+" — prêt. Connecte le robot, charge des drills, puis ▶︎ Next.");
 /* restaure le hub mémorisé (URL saisie une seule fois) */
