@@ -38,10 +38,13 @@
   .legend { font-size:11px; color:var(--mut); display:flex; gap:12px; justify-content:center; margin-top:4px; }
   .legend i { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:4px; vertical-align:-1px; }
   .ver { font-size:11px; color:var(--mut); font-weight:400; margin-left:6px; }
+  body.simple .adv { display:none !important; }
+  #btnMode { flex:0 0 auto; min-width:0; padding:6px 12px; font-size:13px; background:#222b38; }
 </style>
 </head>
 <body>
 <h1>🎾 Court Coach <span id="state" class="pill s-off">déconnecté</span><span id="ver" class="ver"></span></h1>
+<div class="row" style="margin:-6px 0 10px"><button id="btnMode">⚙️ Mode avancé</button></div>
 
 <div class="card">
   <div class="big-status" id="drillName">—</div>
@@ -66,11 +69,10 @@
 
 <div class="card">
   <div class="mut" id="courtLabel">Aperçu du drill</div>
-  <select id="ballSel" style="margin-top:6px"></select>
-  <div class="mut" style="font-size:11px;margin-top:4px">Vue de dessus</div>
+  <select id="ballSel" class="adv" style="margin-top:6px"></select>
   <div id="court"></div>
-  <div class="mut" style="font-size:11px;margin-top:6px">Vue de côté (hauteur × profondeur)</div>
-  <div id="courtSide"></div>
+  <div class="mut adv" style="font-size:11px;margin-top:6px">Vue de côté (hauteur × profondeur)</div>
+  <div id="courtSide" class="adv"></div>
   <div class="legend" style="flex-wrap:wrap"><span><i style="background:#5cc286"></i>lift</span><span><i style="background:#e0b84c"></i>coupé</span><span><i style="background:#9aa7b4"></i>à plat</span><span><i style="background:#ff6b6b"></i>sort</span><span><i style="background:#ffb020"></i>filet rasant</span><span><i style="background:#fff;border:1px solid #888"></i>robot</span></div>
 </div>
 
@@ -82,7 +84,7 @@
   <div class="row" style="margin-top:10px">
     <button id="btnMotor" disabled>▶︎ Moteur ON</button>
   </div>
-  <div class="mut" id="ballTotal" style="margin-top:8px">🎾 balles tirées (à vie) : —</div>
+  <div class="mut adv" id="ballTotal" style="margin-top:8px">🎾 balles tirées (à vie) : —</div>
 </div>
 
 <div class="card">
@@ -90,7 +92,7 @@
   <div id="library" class="mut">(vide — pousse une bibliothèque via le skill)</div>
 </div>
 
-<div class="card">
+<div class="card adv">
   <label>Drills (session JSON) — collés par toi ou poussés par le LLM</label>
   <textarea id="drills" spellcheck="false"></textarea>
   <div class="row" style="margin-top:8px">
@@ -117,8 +119,8 @@
   <div class="mut" id="gInfo" style="margin-top:6px"></div>
 </details>
 
-<details class="card">
-  <summary>🔧 Calibration (frontières terrain)</summary>
+<details class="card adv">
+  <summary>🔧 Calibration (frontières terrain) — avancé</summary>
   <p class="mut">Cherche les <b>limites du terrain</b> : des balles qui encadrent les lignes prédites (fond, côtés, filet). Tu marques in/out → on recale le modèle. Les évidences sont sautées. Position <b>center</b> ; charge des balles.</p>
   <div class="row" style="margin-top:4px">
     <button id="btnCalibLoad">🎯 Charger le chercheur de frontières</button>
@@ -126,7 +128,7 @@
   <label style="margin-top:10px"><input type="checkbox" id="calib" style="width:auto"> Mode calibration (attendre mon verdict ✅/❌ après chaque balle)</label>
 </details>
 
-<details class="card">
+<details class="card adv">
   <summary>⚙️ Hub (Firebase) & aide</summary>
   <label>URL Realtime Database (ex. https://xxx.firebaseio.com)</label>
   <input id="hubUrl" placeholder="(vide = mode local, boutons seulement)">
@@ -138,7 +140,7 @@
   Watch Shortcut : <code>PUT &lt;url&gt;/command.json</code>, corps <b>JSON</b> <code>{"cmd":"next"}</code>.</p>
 </details>
 
-<div class="card">
+<div class="card adv">
   <label>Journal <span class="mut" id="logCount"></span></label>
   <div id="log"></div>
   <div class="row" style="margin-top:8px">
@@ -740,6 +742,11 @@ $("btnStop").onclick=()=>ENGINE.stop();
 $("btnMotor").onclick=()=>motorOn();
 $("btnCalibLoad").onclick=()=>loadCalib();
 $("btnGen").onclick=()=>genZoneDrill();
+function setMode(adv){document.body.classList.toggle("simple",!adv);
+  const b=$("btnMode");if(b)b.textContent=adv?"⬅︎ Mode simple":"⚙️ Mode avancé";
+  try{localStorage.setItem("cc_mode",adv?"adv":"simple");}catch(e){}}
+$("btnMode").onclick=()=>setMode(document.body.classList.contains("simple"));
+(function(){let m="simple";try{m=localStorage.getItem("cc_mode")||"simple";}catch(e){}setMode(m==="adv");})();
 $("btnLogCopy").onclick=()=>LOG.copy();
 $("btnLogExport").onclick=()=>LOG.export();
 $("btnLogClear").onclick=()=>{if(confirm("Vider le journal ?"))LOG.clear();};
@@ -760,7 +767,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v2.8 · 2026-10-28";   // bump à chaque modif
+const APP_VERSION="v2.9 · 2026-10-28";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
