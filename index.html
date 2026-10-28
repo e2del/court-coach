@@ -99,10 +99,10 @@
 </div>
 
 <details class="card">
-  <summary>🔧 Calibration</summary>
-  <p class="mut">Session de test (sweeps + jeu court/lobs) pour valider la formule et les bornes. Position <b>center</b> ; charge des balles.</p>
+  <summary>🔧 Calibration (frontières terrain)</summary>
+  <p class="mut">Cherche les <b>limites du terrain</b> : des balles qui encadrent les lignes prédites (fond, côtés, filet). Tu marques in/out → on recale le modèle. Les évidences sont sautées. Position <b>center</b> ; charge des balles.</p>
   <div class="row" style="margin-top:4px">
-    <button id="btnCalibLoad">🎯 Charger la calibration</button>
+    <button id="btnCalibLoad">🎯 Charger le chercheur de frontières</button>
   </div>
   <label style="margin-top:10px"><input type="checkbox" id="calib" style="width:auto"> Mode calibration (attendre mon verdict ✅/❌ après chaque balle)</label>
 </details>
@@ -435,53 +435,42 @@ async function motorOn(){
     else log("commande envoyée (pas de retour « prêt » en 8 s, état "+BOT.state+").","warn");
   }catch(e){ log("⚠️ Moteur ON échoué : "+e,"err"); }
 }
-// --- Session de calibration embarquée (sweeps + jeu court/lobs), position center ---
-const CALIB_SESSION={name:"Calibration — bornes & max",position:"center",drills:[
- {name:"1 · Speed sweep (arc50, drop0, flat)",pause_after_s:10,balls:[
-  {speed:2,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed2"},
-  {speed:5,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed5"},
-  {speed:8,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed8"},
-  {speed:9.5,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed9.5 (max presets)"},
-  {speed:11,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed11"},
-  {speed:13,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed13 (max hard)"}]},
- {name:"2 · Depth/arc sweep (speed6, drop0, flat)",pause_after_s:10,balls:[
-  {speed:6,arc:0,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"arc0 (tendu)"},
-  {speed:6,arc:20,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"arc20"},
-  {speed:6,arc:40,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"arc40"},
-  {speed:6,arc:60,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"arc60"},
-  {speed:6,arc:80,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"arc80"},
-  {speed:6,arc:99,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"arc99 (max, cloche)"}]},
- {name:"3 · DropPoint sweep (speed6, arc50, flat)",pause_after_s:10,balls:[
-  {speed:6,arc:50,spin:"flat",rotationSpeed:0,dropPoint:-10,interval_s:4,tag:"drop-10 (gauche max)"},
-  {speed:6,arc:50,spin:"flat",rotationSpeed:0,dropPoint:-5,interval_s:4,tag:"drop-5"},
-  {speed:6,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"drop0 (centre)"},
-  {speed:6,arc:50,spin:"flat",rotationSpeed:0,dropPoint:5,interval_s:4,tag:"drop+5"},
-  {speed:6,arc:50,spin:"flat",rotationSpeed:0,dropPoint:10,interval_s:4,tag:"drop+10 (droite max)"}]},
- {name:"4 · Topspin sweep (speed6, arc50)",pause_after_s:10,balls:[
-  {speed:6,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"topspin0 (ref)"},
-  {speed:6,arc:50,spin:"topspin",rotationSpeed:3,dropPoint:0,interval_s:4,tag:"topspin3"},
-  {speed:6,arc:50,spin:"topspin",rotationSpeed:5,dropPoint:0,interval_s:4,tag:"topspin5"},
-  {speed:6,arc:50,spin:"topspin",rotationSpeed:7,dropPoint:0,interval_s:4,tag:"topspin7 (max presets)"}]},
- {name:"5 · Underspin sweep (speed6, arc50)",pause_after_s:10,balls:[
-  {speed:6,arc:50,spin:"backspin",rotationSpeed:3,dropPoint:0,interval_s:4,tag:"under3"},
-  {speed:6,arc:50,spin:"backspin",rotationSpeed:5,dropPoint:0,interval_s:4,tag:"under5"},
-  {speed:6,arc:50,spin:"backspin",rotationSpeed:7,dropPoint:0,interval_s:4,tag:"under7 (max presets)"}]},
- {name:"6 · Combos extrêmes",pause_after_s:10,balls:[
-  {speed:9.5,arc:99,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed9.5 + arc99"},
-  {speed:13,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed13 + arc50"},
-  {speed:9.5,arc:60,spin:"topspin",rotationSpeed:7,dropPoint:10,interval_s:4,tag:"speed9.5 + topspin7 + drop+10"},
-  {speed:9.5,arc:30,spin:"backspin",rotationSpeed:7,dropPoint:-10,interval_s:4,tag:"speed9.5 + under7 + drop-10"}]},
- {name:"7 · Jeu court & lobs (min / spéciaux)",pause_after_s:10,balls:[
-  {speed:1.5,arc:15,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"drop court flat (derrière filet)"},
-  {speed:2,arc:35,spin:"backspin",rotationSpeed:5,dropPoint:0,interval_s:4,tag:"drop court slicé"},
-  {speed:2.5,arc:25,spin:"topspin",rotationSpeed:2,dropPoint:8,interval_s:4,tag:"courte croisée D (drop+8)"},
-  {speed:2.5,arc:25,spin:"topspin",rotationSpeed:2,dropPoint:-8,interval_s:4,tag:"courte croisée R (drop-8)"},
-  {speed:5,arc:90,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"lob no spin (arc90)"},
-  {speed:5,arc:85,spin:"topspin",rotationSpeed:6,dropPoint:0,interval_s:4,tag:"lob topspin (arc85)"},
-  {speed:4,arc:88,spin:"backspin",rotationSpeed:3,dropPoint:0,interval_s:4,tag:"lob flottant slicé (arc88)"}]}
-]};
-function loadCalib(){ $("calib").checked=true; ENGINE.load(CALIB_SESSION);
-  log("Calibration chargée — Mode calibration ON. ▶︎ Moteur ON puis ▶︎ Next.","ok"); }
+// --- Chercheur de frontières : génère des balles qui ENCADRENT les lignes prédites
+//     par le modèle (fond / côtés / filet). On ne teste que la bande incertaine. ---
+function _scanCross(base,key,lo,hi,step,valFn,target,pos){
+  let prev=null;
+  for(let v=lo;v<=hi+1e-9;v+=step){
+    const val=valFn(simOne({...base,[key]:v},pos));
+    if(prev&&(prev.val-target)*(val-target)<=0){
+      const t=(target-prev.val)/((val-prev.val)||1e-9); return prev.v+t*(v-prev.v); }
+    prev={v,val};
+  }
+  return null;
+}
+function _around(c,d,lo,hi){
+  return [...new Set([-2,-1,0,1,2].map(k=>Math.max(lo,Math.min(hi,Math.round((c+k*d)*10)/10))))];
+}
+function buildBoundarySession(pos=0){
+  const B=o=>({speed:6,arc:30,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,...o});
+  const info=s=>`${s.depth.toFixed(1)}m ${s.out?"("+s.out+")":"(IN)"}`;
+  // A — LIGNE DE FOND : varie speed @ arc30, cible profondeur = baseline (COURTG.half)
+  const cf=_scanCross({speed:0,arc:30,spin:"flat",rotationSpeed:0,dropPoint:0},"speed",1,13,0.25,s=>s.depth,COURTG.half,pos);
+  const fond=_around(cf??8,0.6,1,13).map(v=>B({speed:v,arc:30,tag:`FOND speed=${v} → ${info(simOne(B({speed:v,arc:30}),pos))}`}));
+  // B — LIGNES DE CÔTÉ : varie dropPoint @ speed6 arc40, cible |x| = ligne de simple
+  const cw=_scanCross({speed:6,arc:40,spin:"flat",rotationSpeed:0,dropPoint:0},"dropPoint",0,10,0.25,s=>Math.abs(s.x),COURTG.singles,pos);
+  const cote=_around(cw??6,0.6,0,10).map(v=>{const s=simOne(B({speed:6,arc:40,dropPoint:v}),pos);
+    return B({speed:6,arc:40,dropPoint:v,tag:`CÔTÉ drop=${v} → x ${Math.abs(s.x).toFixed(1)}m ${s.out?"("+s.out+")":"(IN)"}`});});
+  // C — FILET : varie speed @ arc8 (tendu), cible profondeur ~1 m (juste après le filet)
+  const cn=_scanCross({speed:0,arc:8,spin:"flat",rotationSpeed:0,dropPoint:0},"speed",1,10,0.25,s=>s.depth,1.0,pos);
+  const filet=_around(cn??3,0.4,0.5,13).map(v=>B({speed:v,arc:8,tag:`FILET speed=${v} → ${info(simOne(B({speed:v,arc:8}),pos))}`}));
+  return {name:"Chercheur de frontières",position:"center",drills:[
+    {name:"A · Ligne de fond (profondeur limite)",pause_after_s:8,balls:fond},
+    {name:"B · Lignes de côté (largeur limite)",pause_after_s:8,balls:cote},
+    {name:"C · Filet (court / bas limite)",pause_after_s:8,balls:filet}
+  ]};
+}
+function loadCalib(){ $("calib").checked=true; ENGINE.load(buildBoundarySession(posIndex("center")));
+  log("Chercheur de frontières chargé (balles autour des lignes) — Mode calibration ON. ▶︎ Moteur ON puis ▶︎ Lancer, marque in/out.","ok"); }
 
 /* ===== Hub (Firebase RTDB en REST, poll 1s) ===== */
 const HUB={url:"",tok:"",iv:null,lastCmd:"",
@@ -696,7 +685,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v2.5 · 2026-10-28";   // bump à chaque modif
+const APP_VERSION="v2.6 · 2026-10-28";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
