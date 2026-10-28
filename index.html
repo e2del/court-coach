@@ -99,6 +99,25 @@
 </div>
 
 <details class="card">
+  <summary>🎾 Générateur de zone</summary>
+  <p class="mut">Décris le résultat voulu, l'app calcule des balles qui tombent dans la zone (jamais faute, en simple).</p>
+  <label>Profondeur cible (m depuis le filet) — fond ≈ 11.4</label>
+  <input id="gDepth" type="number" value="11.4" step="0.1" min="0.5" max="11.8">
+  <label>Latéral (m : 0 = centre, + = droite) — ligne de simple ±4.1</label>
+  <input id="gLat" type="number" value="0" step="0.5" min="-4" max="4">
+  <label>Effet</label>
+  <select id="gSpin"><option value="topspin">Lift (topspin)</option><option value="flat">À plat</option><option value="backspin">Coupé (slice)</option></select>
+  <label>Puissance d'effet (0–7)</label>
+  <input id="gStr" type="number" value="5" min="0" max="7" step="1">
+  <label>Trajectoire</label>
+  <select id="gStyle"><option value="loop">Liftée (loop)</option><option value="flat">Tendue</option><option value="lob">Lob</option><option value="slice">Slice bas</option></select>
+  <label>Nombre de balles</label>
+  <input id="gN" type="number" value="10" min="1" max="30" step="1">
+  <div class="row" style="margin-top:8px"><button id="btnGen">🎾 Générer le drill</button></div>
+  <div class="mut" id="gInfo" style="margin-top:6px"></div>
+</details>
+
+<details class="card">
   <summary>🔧 Calibration (frontières terrain)</summary>
   <p class="mut">Cherche les <b>limites du terrain</b> : des balles qui encadrent les lignes prédites (fond, côtés, filet). Tu marques in/out → on recale le modèle. Les évidences sont sautées. Position <b>center</b> ; charge des balles.</p>
   <div class="row" style="margin-top:4px">
@@ -323,7 +342,7 @@ const BOT={state:null,ready:true,serving:false,missing:false,_waiters:[],
 /* ===== Moteur de session ===== */
 const ENGINE={session:null,i:-1,bi:0,cur:null,state:"off",timer:null,paused:false,_resume:null,_run:0,
  load(json){try{const s=typeof json==="string"?JSON.parse(json):json;
-   if(!s.drills||!Array.isArray(s.drills))throw"pas de 'drills'";this.session=s;this.i=-1;this.bi=0;this.paused=false;
+   if(!s.drills||!Array.isArray(s.drills))throw"pas de 'drills'";this.session=resolveSession(s);this.i=-1;this.bi=0;this.paused=false;
    $("drillName").textContent=s.name||"Session";
    const sel=$("drillSel");
    if(sel)sel.innerHTML=s.drills.map((d,i)=>`<option value="${i}">Drill ${i+1}/${s.drills.length} — ${(d.name||("Drill "+(i+1)))}</option>`).join("");
@@ -472,6 +491,21 @@ function buildBoundarySession(pos=0){
 function loadCalib(){ $("calib").checked=true; ENGINE.load(buildBoundarySession(posIndex("center")));
   log("Chercheur de frontières chargé (balles autour des lignes) — Mode calibration ON. ▶︎ Moteur ON puis ▶︎ Lancer, marque in/out.","ok"); }
 
+// Générateur de zone (A) : lit le formulaire -> drill de N balles 'intention' résolues par le modèle.
+function genZoneDrill(){
+  const depth=+$("gDepth").value, lateral=+$("gLat").value, spin=$("gSpin").value,
+        spinStrength=+$("gStr").value, style=$("gStyle").value, n=Math.max(1,Math.min(30,+$("gN").value||10));
+  const r=solveBall({depth,lateral,spin,spinStrength,style,pos:posIndex("center")});
+  const info=`speed ${r.ball.speed} · arc ${r.ball.arc} · drop ${r.ball.dropPoint} · ${spin} rot${spinStrength} → ${r.predicted.depth}m / x ${r.predicted.x}m (${r.predicted.out}) ${r.ok?"✅":"⚠️ "+r.reason}`;
+  $("gInfo").textContent=info;
+  const tag=_intentTag({depth,lateral,spin,style});
+  const balls=Array.from({length:n},()=>({intent:{depth,lateral,spin,spinStrength,style},interval_s:3.5,tag}));
+  const sess={name:"Zone — "+tag,position:"center",drills:[{name:tag,pause_after_s:5,balls}]};
+  $("drills").value=JSON.stringify(sess,null,1);
+  ENGINE.load(sess);
+  log("Drill généré ("+n+" balles) : "+info, r.ok?"ok":"warn");
+}
+
 // --- SOLVEUR INVERSE : zone + type de coup -> paramètres machine (via le modèle) ---
 // Recherche dichotomique sur une grandeur MONOTONE croissante.
 function _solveMono(fn,lo,hi,target){let a=lo,b=hi;for(let k=0;k<28;k++){const m=(a+b)/2;(fn(m)<target)?a=m:b=m;}return (a+b)/2;}
@@ -481,9 +515,10 @@ function solveBall({depth=11.4,lateral=0,spin="topspin",spinStrength=5,style="lo
   const arc=STYLE_ARC[style]??35;
   const base={arc,spin,rotationSpeed:spinStrength,dropPoint:0};
   const dAt=v=>simOne({...base,speed:v},pos).depth;        // profondeur croît avec speed (arc fixe)
-  if(dAt(13)<depth)   return {ok:false,reason:`profondeur ${depth}m hors d'atteinte avec un ${style} (même à vitesse max) — baisse l'arc/la hauteur`};
-  if(dAt(0.5)>depth)  return {ok:false,reason:`trop profond pour un ${style} à vitesse min — augmente l'arc ou vise plus court`};
-  const speed=Math.round(_solveMono(dAt,0.5,13,depth)*10)/10;
+  let speed,note="";
+  if(dAt(13)<depth){speed=13;note="zone trop loin pour ce style (vitesse max)";}
+  else if(dAt(0.5)>depth){speed=0.5;note="zone trop courte pour ce style (vitesse min)";}
+  else speed=Math.round(_solveMono(dAt,0.5,13,depth)*10)/10;
   base.speed=speed;
   let dropPoint=0;
   if(Math.abs(lateral)>0.05){
@@ -492,8 +527,23 @@ function solveBall({depth=11.4,lateral=0,spin="topspin",spinStrength=5,style="lo
   }
   const ball={speed,arc,spin,rotationSpeed:spinStrength,dropPoint,interval_s:3.5};
   const s=simOne(ball,pos);
-  return {ok:!s.out, ball, predicted:{depth:+s.depth.toFixed(2),x:+s.x.toFixed(2),out:s.out||"in"},
-          reason:s.out?("sort: "+s.out):"ok"};
+  return {ok:!s.out&&!note, ball, predicted:{depth:+s.depth.toFixed(2),x:+s.x.toFixed(2),out:s.out||"in"},
+          reason:s.out?("sort: "+s.out):(note||"ok")};
+}
+// Étiquette lisible d'une intention
+function _intentTag(it){return `${it.spin||"topspin"} ${it.style||"loop"} prof${it.depth??11.4}${it.lateral?(" lat"+it.lateral):""}`;}
+// Résout une balle "intention" en paramètres concrets via solveBall ; sinon renvoie la balle telle quelle.
+function resolveBall(ball,pos){
+  if(!ball||!ball.intent) return ball;
+  const r=solveBall({...ball.intent,pos});
+  if(!r.ok) log("⚠️ intention « "+(ball.tag||_intentTag(ball.intent))+" » : "+r.reason,"warn");
+  return {...r.ball, interval_s: ball.interval_s ?? r.ball.interval_s,
+          tag: ball.tag || _intentTag(ball.intent), _intent: ball.intent, _pred: r.predicted};
+}
+// Résout tous les drills d'une session (balles intention -> params), position drill/session.
+function resolveSession(s){
+  return {...s, drills:(s.drills||[]).map(d=>({...d,
+    balls:(d.balls||[]).map(b=>resolveBall(b, posIndex(d.position ?? s.position ?? 0)))}))};
 }
 
 /* ===== Hub (Firebase RTDB en REST, poll 1s) ===== */
@@ -689,6 +739,7 @@ $("drillSel").onchange=()=>ENGINE.select(parseInt($("drillSel").value,10));
 $("btnStop").onclick=()=>ENGINE.stop();
 $("btnMotor").onclick=()=>motorOn();
 $("btnCalibLoad").onclick=()=>loadCalib();
+$("btnGen").onclick=()=>genZoneDrill();
 $("btnLogCopy").onclick=()=>LOG.copy();
 $("btnLogExport").onclick=()=>LOG.export();
 $("btnLogClear").onclick=()=>{if(confirm("Vider le journal ?"))LOG.clear();};
@@ -709,7 +760,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v2.7 · 2026-10-28";   // bump à chaque modif
+const APP_VERSION="v2.8 · 2026-10-28";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
