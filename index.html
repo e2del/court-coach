@@ -54,7 +54,6 @@
     <button id="btnStop" disabled>⏹ Stop</button>
     <button id="btnReload" disabled>⟳ Reload drills</button>
   </div>
-  <label style="margin-top:10px"><input type="checkbox" id="calib" style="width:auto"> Mode calibration (attendre mon verdict après chaque balle)</label>
   <div class="row" id="verdictRow" style="margin-top:8px;display:none">
     <button id="vGood">✅ Bonne</button>
     <button id="vNet">❌ Filet</button>
@@ -76,10 +75,8 @@
   <div class="mut" id="dev" style="margin-top:8px">Non connecté. (HTTPS + Bluefy/Chrome requis.)</div>
   <div class="row" style="margin-top:10px">
     <button id="btnMotor" disabled>▶︎ Moteur ON</button>
-    <button id="btnTest" disabled>🎾 Test balle</button>
   </div>
   <div class="mut" id="ballTotal" style="margin-top:8px">🎾 balles tirées (à vie) : —</div>
-  <label style="margin-top:10px"><input type="checkbox" id="dry" checked style="width:auto"> Mode dry-run (ne tire pas — log seulement)</label>
 </div>
 
 <div class="card">
@@ -94,6 +91,15 @@
     <button id="btnLoad">Charger ce JSON</button>
   </div>
 </div>
+
+<details class="card">
+  <summary>🔧 Calibration</summary>
+  <p class="mut">Session de test (sweeps + jeu court/lobs) pour valider la formule et les bornes. Position <b>center</b> ; charge des balles.</p>
+  <div class="row" style="margin-top:4px">
+    <button id="btnCalibLoad">🎯 Charger la calibration</button>
+  </div>
+  <label style="margin-top:10px"><input type="checkbox" id="calib" style="width:auto"> Mode calibration (attendre mon verdict ✅/❌ après chaque balle)</label>
+</details>
 
 <details class="card">
   <summary>⚙️ Hub (Firebase) & aide</summary>
@@ -258,7 +264,7 @@ const BLE={dev:null,wr:null,verified:false,rxbuf:[],
    const key=handshakeKey(sn,code);log("challenge sn="+sn+" → clé "+key.slice(0,8)+"…","ok");
    this.send(0x08,[...new TextEncoder().encode(key)]).then(()=>{this.verified=true;
      log("handshake envoyé ✔","ok");enableControls();
-     $("btnMotor").disabled=false;$("btnTest").disabled=false;
+     $("btnMotor").disabled=false;
      this.send(0x10);});   // récupère le compteur de balles à vie
  }catch(e){log("challenge illisible: "+e,"err");}}
 };
@@ -328,7 +334,7 @@ const ENGINE={session:null,i:-1,cur:null,state:"off",timer:null,
      await fireBall(ball);
      // espacement : en live on attend la fin du tir (notif retour "prêt", état 3) avant
      // l'intervalle ; en dry/local on retombe sur le délai configuré.
-     if(!$("dry").checked&&BLE.verified) await BOT.waitReady(10000);
+     if(BLE.verified) await BOT.waitReady(10000);
      if($("calib").checked){ await this.awaitVerdict(ball); await sleep(300); }
      else await sleep((ball.interval_s??3)*1000);
    }}
@@ -382,7 +388,7 @@ function buildFire(ball,position){
 }
 async function fireBall(ball){
   const p=`speed=${ball.speed} arc=${ball.arc} spin=${ball.spin} rot=${ball.rotationSpeed} drop=${ball.dropPoint}`;
-  if($("dry").checked||!BLE.verified){log("DRY fireBall("+p+")");return;}
+  if(!BLE.verified){log("(simulation, non connecté) fireBall("+p+")");return;}
   // GATING : on n'envoie le tir que si le robot est PRÊT (état 3). Sinon on saute la balle.
   const ready=await BOT.waitReady(8000);
   if(!ready){log("⚠️ Robot pas prêt (état "+BOT.state+") — tir sauté.","err");return;}
@@ -405,23 +411,53 @@ async function motorOn(){
     else log("commande envoyée (pas de retour « prêt » en 8 s, état "+BOT.state+").","warn");
   }catch(e){ log("⚠️ Moteur ON échoué : "+e,"err"); }
 }
-// payload startServe 0x81 EXACT capturé (connect_start_test.pklg) — tir de test
-const FIRE="010100000000a040037c0e0000370b0000333393419a99d9bf0000b04001000000"
-            .match(/../g).map(h=>parseInt(h,16));
-async function testFire(){
-  if(!BLE.verified){log("Connecte le robot d'abord.","warn");return;}
-  if($("dry").checked){log("Décoche « Mode dry-run » pour tirer pour de vrai.","warn");return;}
-  log("🎾 Test balle — attente état prêt (3)…");
-  if(!await BOT.waitReady(8000)){log("⚠️ Robot pas prêt (état "+BOT.state+") — fais « ▶︎ Moteur ON » d'abord.","err");return;}
-  BOT.serving=true; BOT.missing=false;
-  try{ log("🎾 TIR 0x81 (payload capturé)…"); await BLE.send(0x81,FIRE); }
-  catch(e){ log("⚠️ Tir échoué (BLE) : "+e,"err"); return; }
-  const back=await BOT.waitReady(20000);   // retour à l'état 3 = fin du cycle
-  if(BOT.missing)    log("=> RÉSULTAT : PLUS DE BALLE (code 2006).","err");
-  else if(back)      log("=> RÉSULTAT : tir effectué, robot de retour à l'état prêt.","ok");
-  else               log("=> RÉSULTAT : pas de retour clair (dernier état "+BOT.state+").","warn");
-  BLE.send(0x10).catch(()=>{});   // rafraîchit le compteur de balles
-}
+// --- Session de calibration embarquée (sweeps + jeu court/lobs), position center ---
+const CALIB_SESSION={name:"Calibration — bornes & max",position:"center",drills:[
+ {name:"1 · Speed sweep (arc50, drop0, flat)",pause_after_s:10,balls:[
+  {speed:2,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed2"},
+  {speed:5,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed5"},
+  {speed:8,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed8"},
+  {speed:9.5,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed9.5 (max presets)"},
+  {speed:11,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed11"},
+  {speed:13,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed13 (max hard)"}]},
+ {name:"2 · Depth/arc sweep (speed6, drop0, flat)",pause_after_s:10,balls:[
+  {speed:6,arc:0,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"arc0 (tendu)"},
+  {speed:6,arc:20,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"arc20"},
+  {speed:6,arc:40,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"arc40"},
+  {speed:6,arc:60,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"arc60"},
+  {speed:6,arc:80,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"arc80"},
+  {speed:6,arc:99,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"arc99 (max, cloche)"}]},
+ {name:"3 · DropPoint sweep (speed6, arc50, flat)",pause_after_s:10,balls:[
+  {speed:6,arc:50,spin:"flat",rotationSpeed:0,dropPoint:-10,interval_s:4,tag:"drop-10 (gauche max)"},
+  {speed:6,arc:50,spin:"flat",rotationSpeed:0,dropPoint:-5,interval_s:4,tag:"drop-5"},
+  {speed:6,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"drop0 (centre)"},
+  {speed:6,arc:50,spin:"flat",rotationSpeed:0,dropPoint:5,interval_s:4,tag:"drop+5"},
+  {speed:6,arc:50,spin:"flat",rotationSpeed:0,dropPoint:10,interval_s:4,tag:"drop+10 (droite max)"}]},
+ {name:"4 · Topspin sweep (speed6, arc50)",pause_after_s:10,balls:[
+  {speed:6,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"topspin0 (ref)"},
+  {speed:6,arc:50,spin:"topspin",rotationSpeed:3,dropPoint:0,interval_s:4,tag:"topspin3"},
+  {speed:6,arc:50,spin:"topspin",rotationSpeed:5,dropPoint:0,interval_s:4,tag:"topspin5"},
+  {speed:6,arc:50,spin:"topspin",rotationSpeed:7,dropPoint:0,interval_s:4,tag:"topspin7 (max presets)"}]},
+ {name:"5 · Underspin sweep (speed6, arc50)",pause_after_s:10,balls:[
+  {speed:6,arc:50,spin:"backspin",rotationSpeed:3,dropPoint:0,interval_s:4,tag:"under3"},
+  {speed:6,arc:50,spin:"backspin",rotationSpeed:5,dropPoint:0,interval_s:4,tag:"under5"},
+  {speed:6,arc:50,spin:"backspin",rotationSpeed:7,dropPoint:0,interval_s:4,tag:"under7 (max presets)"}]},
+ {name:"6 · Combos extrêmes",pause_after_s:10,balls:[
+  {speed:9.5,arc:99,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed9.5 + arc99"},
+  {speed:13,arc:50,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"speed13 + arc50"},
+  {speed:9.5,arc:60,spin:"topspin",rotationSpeed:7,dropPoint:10,interval_s:4,tag:"speed9.5 + topspin7 + drop+10"},
+  {speed:9.5,arc:30,spin:"backspin",rotationSpeed:7,dropPoint:-10,interval_s:4,tag:"speed9.5 + under7 + drop-10"}]},
+ {name:"7 · Jeu court & lobs (min / spéciaux)",pause_after_s:10,balls:[
+  {speed:1.5,arc:15,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"drop court flat (derrière filet)"},
+  {speed:2,arc:35,spin:"backspin",rotationSpeed:5,dropPoint:0,interval_s:4,tag:"drop court slicé"},
+  {speed:2.5,arc:25,spin:"topspin",rotationSpeed:2,dropPoint:8,interval_s:4,tag:"courte croisée D (drop+8)"},
+  {speed:2.5,arc:25,spin:"topspin",rotationSpeed:2,dropPoint:-8,interval_s:4,tag:"courte croisée R (drop-8)"},
+  {speed:5,arc:90,spin:"flat",rotationSpeed:0,dropPoint:0,interval_s:4,tag:"lob no spin (arc90)"},
+  {speed:5,arc:85,spin:"topspin",rotationSpeed:6,dropPoint:0,interval_s:4,tag:"lob topspin (arc85)"},
+  {speed:4,arc:88,spin:"backspin",rotationSpeed:3,dropPoint:0,interval_s:4,tag:"lob flottant slicé (arc88)"}]}
+]};
+function loadCalib(){ $("calib").checked=true; ENGINE.load(CALIB_SESSION);
+  log("Calibration chargée — Mode calibration ON. ▶︎ Moteur ON puis ▶︎ Next.","ok"); }
 
 /* ===== Hub (Firebase RTDB en REST, poll 1s) ===== */
 const HUB={url:"",tok:"",iv:null,lastCmd:"",
@@ -547,7 +583,7 @@ $("btnNext").onclick=()=>ENGINE.next();
 $("btnPause").onclick=()=>ENGINE.pause();
 $("btnStop").onclick=()=>ENGINE.stop();
 $("btnMotor").onclick=()=>motorOn();
-$("btnTest").onclick=()=>testFire();
+$("btnCalibLoad").onclick=()=>loadCalib();
 $("btnLogCopy").onclick=()=>LOG.copy();
 $("btnLogExport").onclick=()=>LOG.export();
 $("btnLogClear").onclick=()=>{if(confirm("Vider le journal ?"))LOG.clear();};
@@ -568,7 +604,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v2.0 · 2026-10-28";   // bump à chaque modif
+const APP_VERSION="v2.1 · 2026-10-28";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
