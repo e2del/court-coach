@@ -192,13 +192,25 @@ const BLE={dev:null,wr:null,verified:false,rxbuf:[],
  async send(op,data=[]){ try{ const f=buildFrame(op,data);
      for(let k=0;k<f.length;k+=252) await this.wr.writeValueWithResponse(f.slice(k,k+252));
    }catch(e){ this.verified=false; setDev("⚠️ Écriture BLE échouée — reconnecte"); throw e; } },
+ // Envoi GATÉ : n'émet la commande que si le robot est prêt (état 3). Sinon attend la
+ // notif, et au pire annule après le timeout — on ne commande jamais un robot pas prêt.
+ async sendWhenReady(op,data=[],{wait=8000,label=""}={}){
+   if(!this.verified){log("commande ignorée (non authentifié)","warn");return false;}
+   const ok=await BOT.waitReady(wait);
+   if(!ok){log("⚠️ Robot pas prêt (état "+BOT.state+") — "+(label||("0x"+op.toString(16)))+" annulée.","err");return false;}
+   await this.send(op,data); return true;
+ },
  onNotify(bytes){this.rxbuf.push(...bytes);
    // extraction trame RX (45 54)
    while(true){const j=this.rxbuf.findIndex((b,k)=>b===0x45&&this.rxbuf[k+1]===0x54);
      if(j<0||this.rxbuf.length<j+4)break;const len=this.rxbuf[j+2]|this.rxbuf[j+3]<<8;const tot=4+len;
      if(j+tot>this.rxbuf.length)break;const raw=Uint8Array.from(this.rxbuf.slice(j,j+tot));
      this.rxbuf.splice(0,j+tot);const r=parseRx(raw);if(!r)continue;
-     if(r.op===0x07)this.onChallenge(r.data);}
+     if(r.op===0x07)this.onChallenge(r.data);
+     else if(r.op===0x02)BOT.onStatus(r.data);      // machine d'état robot
+     else if(r.op===0x13)BOT.onCountdown(r.data);   // compte à rebours de lancer
+     if(!BOT.SAFE.has(r.op))BOT.checkCode(r);        // codes d'erreur (2006=plus de balle…)
+   }
  },
  onChallenge(d){try{const snL=d[0],cL=d[1];
    const sn=new TextDecoder().decode(d.slice(2,2+snL));
@@ -207,6 +219,40 @@ const BLE={dev:null,wr:null,verified:false,rxbuf:[],
    this.send(0x08,[...new TextEncoder().encode(key)]).then(()=>{this.verified=true;
      log("handshake envoyé ✔","ok");enableControls();});
  }catch(e){log("challenge illisible: "+e,"err");}}
+};
+
+/* ===== Télémétrie robot : état (0x02), compte à rebours (0x13), codes d'erreur =====
+   Sens reversé de l'APK (reverse/DEVICESTATUS.md). Le "code" (uint16 LE) n'a pas été
+   capturé en live : on le décode au mieux en tête des données, et seulement sur les
+   trames non-getter (SAFE) pour éviter les faux positifs. */
+const BOT={state:null,ready:true,serving:false,_waiters:[],
+ SAFE:new Set([0x01,0x02,0x03,0x07,0x10,0x11,0x13,0x15,0x24]), // getters décodés = pas d'erreur
+ LABEL:{0:"init",2:"veille",3:"prêt",4:"tir en cours",5:"fin de cycle",6:"pause",
+        7:"sommeil",8:"déclenchement",9:"avertissement",11:"erreur"},
+ CODES:{2006:"plus de balle",2008:"batterie faible",2014:"erreur (#1007)",4014:"erreur au démarrage"},
+ _resolve(ok){const w=this._waiters;this._waiters=[];w.forEach(f=>f(ok));},
+ onStatus(d){const s=d[0];if(s===this.state)return;this.state=s;
+   const lab=this.LABEL[s]||("état "+s);
+   if(s===8||s===4||s===5)this.serving=true;                 // tir en cours
+   this.ready=(s===3);                                        // 3 = prêt/repos
+   if(s===3){this.serving=false;this._resolve(true);}         // prêt : débloque les attentes
+   log("robot: "+lab+" (0x02="+s+")",s===3?"ok":"");
+   if(BLE.verified)setDev("🟢 "+lab);},
+ onCountdown(d){const n=d[0];log("lancer dans "+n+"…");this.serving=true;},
+ // Attend que le robot soit PRÊT (état 3). Résolu par notif ; timeout => false (jamais bloqué).
+ waitReady(ms=8000){ if(this.ready&&!this.serving)return Promise.resolve(true);
+   return new Promise(res=>{let done=false;const f=ok=>{if(done)return;done=true;res(ok);};
+     this._waiters.push(f); setTimeout(()=>f(false),ms);}); },
+ checkCode(r){
+   if(!r.data||r.data.length<2)return;
+   const c0=r.data[0]|r.data[1]<<8, c1=(r.data.length>=3)?(r.data[1]|r.data[2]<<8):-1;
+   const code=this.CODES[c0]?c0:(this.CODES[c1]?c1:0);
+   if(!code)return;
+   log("⚠️ robot: "+this.CODES[code]+" (code "+code+", op 0x"+r.op.toString(16)+")","err");
+   if(code===2006){ setDev("🟠 Plus de balle");
+     if(ENGINE.state==="playing"){ ENGINE.pause();
+       log("⚠️ Plus de balle — recharge le chargeur puis ▶︎ Next drill.","err"); } }
+ }
 };
 
 /* ===== Moteur de session ===== */
@@ -228,6 +274,9 @@ const ENGINE={session:null,i:-1,cur:null,state:"off",timer:null,
      if(this.state!=="playing"){log("interrompu");return;}
      const ball=d.balls[b];$("ballInfo").textContent=`balle ${b+1}/${d.balls.length}`+(reps>1?` (rep ${r+1}/${reps})`:"");
      await fireBall(ball);
+     // espacement : en live on attend la fin du tir (notif retour "prêt", état 3) avant
+     // l'intervalle ; en dry/local on retombe sur le délai configuré.
+     if(!$("dry").checked&&BLE.verified) await BOT.waitReady(10000);
      await sleep((ball.interval_s??3)*1000);
    }}
    log("Drill fini — pause "+(d.pause_after_s??0)+"s puis WAITING.");
@@ -244,10 +293,13 @@ const sleep=ms=>new Promise(r=>{ENGINE.timer=setTimeout(r,ms);});
 async function fireBall(ball){
   const p=`speed=${ball.speed} arc=${ball.arc} spin=${ball.spin} rot=${ball.rotationSpeed} drop=${ball.dropPoint}`;
   if($("dry").checked||!BLE.verified){log("DRY fireBall("+p+")");return;}
+  // GATING : on n'envoie le tir que si le robot est PRÊT (état 3). Sinon on saute la balle.
+  const ready=await BOT.waitReady(8000);
+  if(!ready){log("⚠️ Robot pas prêt (état "+BOT.state+") — tir sauté.","err");return;}
   try{
-    // TODO: encoder les 24 octets + opcode (0x80/0x81 ou 0x46) une fois la capture faite,
-    //       puis: await BLE.send(OPCODE, bytes);
-    log("fireBall("+p+") — format réel non branché (fais une capture).","warn");
+    // TODO: payload réel 0x81 une fois la formule RPM branchée :
+    //   BOT.serving=true; await BLE.send(0x81, bytes);
+    log("fireBall("+p+") — payload réel non branché (en attente de la formule RPM).","warn");
   }catch(e){ log("⚠️ Tir échoué (BLE) : "+e+" — séance en pause.","err"); ENGINE.pause(); }
 }
 
@@ -387,7 +439,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v1.1 · 2026-10-28";   // bump à chaque modif
+const APP_VERSION="v1.3 · 2026-10-28";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 log("Court Coach "+APP_VERSION+" — prêt. Connecte le robot, charge des drills, puis ▶︎ Next.");
 /* restaure le hub mémorisé (URL saisie une seule fois) */
