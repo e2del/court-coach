@@ -266,7 +266,14 @@ const BOT={state:null,ready:true,serving:false,missing:false,_waiters:[],
         7:"sommeil",8:"déclenchement",9:"avertissement",11:"erreur"},
  CODES:{2006:"plus de balle",2008:"batterie faible",2014:"erreur (#1007)",4014:"erreur au démarrage"},
  _resolve(ok){const w=this._waiters;this._waiters=[];w.forEach(f=>f(ok));},
- onStatus(d){const s=d[0];if(s===this.state)return;this.state=s;
+ onStatus(d){const s=d[0];
+   // sous-code en queue (data[1..2], normalement 2) : 1003 = plus de balle (Aura 1003 / code 2006).
+   // Vérifié AVANT le court-circuit d'état : le 04eb03 suit un 040200 avec le MÊME état 4.
+   const sub=d.length>=3?(d[1]|d[2]<<8):2;
+   if(sub===1003&&!this.missing){ this.missing=true; setDev("🟠 Plus de balle");
+     log("⚠️ Plus de balle (0x02 sous-code 1003) — recharge le chargeur.","err");
+     if(ENGINE.state==="playing") ENGINE.pause(); }
+   if(s===this.state)return;this.state=s;
    const lab=this.LABEL[s]||("état "+s);
    if(s===8||s===4||s===5)this.serving=true;                 // tir en cours
    this.ready=(s===3);                                        // 3 = prêt/repos
@@ -510,7 +517,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v1.6 · 2026-10-28";   // bump à chaque modif
+const APP_VERSION="v1.7 · 2026-10-28";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
