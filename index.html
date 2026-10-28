@@ -46,13 +46,15 @@
 <div class="card">
   <div class="big-status" id="drillName">—</div>
   <div class="mut" id="ballInfo">aucune session chargée</div>
-  <div class="row" style="margin-top:12px">
-    <button id="btnNext" class="primary big" disabled>▶︎ Next drill</button>
+  <select id="drillSel" style="margin-top:10px"></select>
+  <div class="row" style="margin-top:10px">
+    <button id="btnPlay" class="primary big" disabled>▶︎ Lancer</button>
   </div>
   <div class="row" style="margin-top:8px">
-    <button id="btnPause" disabled>⏸ Pause</button>
+    <button id="btnPrev" disabled>◀ Drill</button>
+    <button id="btnNext" disabled>Suivant ▶</button>
     <button id="btnStop" disabled>⏹ Stop</button>
-    <button id="btnReload" disabled>⟳ Reload drills</button>
+    <button id="btnReload" disabled>⟳ Reload</button>
   </div>
   <div class="row" id="verdictRow" style="margin-top:8px;display:none">
     <button id="vGood">✅ Bonne</button>
@@ -216,6 +218,7 @@ function log(m,cls){const t=new Date().toLocaleTimeString();LOG.push(t,m,cls);
 function setState(s){const map={idle:["s-idle","idle"],playing:["s-playing","en cours"],
   waiting:["s-waiting","attente (tap next)"],paused:["s-paused","pause"],off:["s-off","déconnecté"]};
   const[c,t]=map[s]||map.off;const e=$("state");e.className="pill "+c;e.textContent=t;ENGINE.state=s;
+  const pb=$("btnPlay");if(pb)pb.textContent=s==="playing"?"⏸ Pause":s==="paused"?"▶︎ Reprendre":"▶︎ Lancer";
   if(HUB.url)HUB.put("status",{state:s,drill:ENGINE.i,name:ENGINE.cur?.name||null});}
 
 /* ===== BLE ===== */
@@ -318,37 +321,54 @@ const BOT={state:null,ready:true,serving:false,missing:false,_waiters:[],
 };
 
 /* ===== Moteur de session ===== */
-const ENGINE={session:null,i:-1,cur:null,state:"off",timer:null,
+const ENGINE={session:null,i:-1,bi:0,cur:null,state:"off",timer:null,paused:false,_resume:null,_run:0,
  load(json){try{const s=typeof json==="string"?JSON.parse(json):json;
-   if(!s.drills||!Array.isArray(s.drills))throw"pas de 'drills'";this.session=s;this.i=-1;
+   if(!s.drills||!Array.isArray(s.drills))throw"pas de 'drills'";this.session=s;this.i=-1;this.bi=0;this.paused=false;
    $("drillName").textContent=s.name||"Session";
-   $("ballInfo").textContent=s.drills.length+" drills prêts";
-   enableControls();setState(BLE.verified?"waiting":"idle");
-   if(s.drills[0])renderCourt(s.drills[0],"Aperçu — "+(s.drills[0].name||"Drill 1"));
+   const sel=$("drillSel");
+   if(sel)sel.innerHTML=s.drills.map((d,i)=>`<option value="${i}">Drill ${i+1}/${s.drills.length} — ${(d.name||("Drill "+(i+1)))}</option>`).join("");
+   enableControls();
+   this.select(0,true);
    log("Session chargée: "+s.drills.length+" drills.","ok");}catch(e){log("JSON invalide: "+e,"err");}},
- async next(){if(!this.session)return;if(this.state==="playing")return;
-   this.i++;if(this.i>=this.session.drills.length){log("Session terminée.","ok");setState("idle");this.i=-1;return;}
-   this.cur=this.session.drills[this.i];await this.playDrill(this.cur);},
- async playDrill(d){setState("playing");$("drillName").textContent=d.name||("Drill "+(this.i+1));
-   renderCourt(d,"En cours — "+(d.name||("Drill "+(this.i+1))));
-   const reps=d.repeat||1;
-   for(let r=0;r<reps;r++){for(let b=0;b<d.balls.length;b++){
-     if(this.state!=="playing"){log("interrompu");return;}
-     const ball=d.balls[b];$("ballInfo").textContent=`balle ${b+1}/${d.balls.length}`+(reps>1?` (rep ${r+1}/${reps})`:"");
-     await fireBall(ball);
-     // espacement : en live on attend la fin du tir (notif retour "prêt", état 3) avant
-     // l'intervalle ; en dry/local on retombe sur le délai configuré.
+ select(i,silent){if(!this.session)return;const N=this.session.drills.length;
+   i=Math.max(0,Math.min(N-1,i));this.i=i;this.bi=0;this.paused=false;this.cur=this.session.drills[i];
+   const sel=$("drillSel");if(sel)sel.value=String(i);
+   $("drillName").textContent=this.cur.name||("Drill "+(i+1));
+   renderCourt(this.cur,this.cur.name||("Drill "+(i+1)));
+   setState(BLE.verified?"waiting":"idle");
+   $("ballInfo").textContent=`Drill ${i+1}/${N} — ${this.cur.balls.length} balle(s)`;
+   if(!silent)log("Drill "+(i+1)+"/"+N+" : "+(this.cur.name||""));},
+ prevDrill(){this.stopRun();this.select(this.i-1);},
+ togglePlay(){if(this.state==="playing")this.pause();else this.play();},
+ play(){if(!this.session)return;
+   if(this.paused){this.paused=false;setState("playing");const r=this._resume;this._resume=null;if(r)r();log("reprise");return;}
+   if(this.state==="playing")return;
+   if(this.i<0)this.i=0;this.cur=this.session.drills[this.i];this.playDrill(this.cur);},
+ pause(){if(this.state==="playing"){this.paused=true;setState("paused");log("pause");}},
+ stopRun(){this._run++;this.state="idle";this.paused=false;this.bi=0;const r=this._resume;this._resume=null;if(r)r();if(this._verdict)this._verdict("—");},
+ stop(){this.stopRun();setState("idle");if(this.session)this.select(this.i,true);$("ballInfo").textContent="stop";log("stop");},
+ nextDrill(){if(!this.session)return;if(this.i<this.session.drills.length-1){this.stopRun();this.select(this.i+1,true);this.play();}else{log("Dernier drill.","warn");setState("waiting");}},
+ _gate(){return this.paused?new Promise(r=>{this._resume=r;}):Promise.resolve();},
+ async playDrill(d){const run=++this._run;setState("playing");this.paused=false;
+   $("drillName").textContent=d.name||("Drill "+(this.i+1));
+   renderCourt(d,d.name||("Drill "+(this.i+1)));
+   const reps=d.repeat||1,seq=[];
+   for(let r=0;r<reps;r++)for(let b=0;b<d.balls.length;b++)seq.push({ball:d.balls[b],b,r});
+   for(;this.bi<seq.length;this.bi++){
+     await this._gate(); if(this._run!==run)return;
+     const it=seq[this.bi];
+     $("ballInfo").textContent=`balle ${it.b+1}/${d.balls.length}`+(reps>1?` (rep ${it.r+1}/${reps})`:"");
+     await fireBall(it.ball); if(this._run!==run)return;
      if(BLE.verified) await BOT.waitReady(10000);
-     if($("calib").checked){ await this.awaitVerdict(ball); await sleep(300); }
-     else await sleep((ball.interval_s??3)*1000);
-   }}
-   log("Drill fini — pause "+(d.pause_after_s??0)+"s puis WAITING.");
-   await sleep((d.pause_after_s??0)*1000);
-   setState("waiting");$("ballInfo").textContent="tape ▶︎ Next drill";
-   const nx=this.session&&this.session.drills[this.i+1];
-   if(nx)renderCourt(nx,"À suivre — "+(nx.name||"Drill "+(this.i+2)));},
- pause(){if(this._verdict)this._verdict("—");if(this.state==="playing"){setState("paused");log("pause");}},
- stop(){if(this._verdict)this._verdict("—");this.state="idle";this.i=-1;setState("idle");$("ballInfo").textContent="stop";log("stop");},
+     if($("calib").checked){ await this.awaitVerdict(it.ball); await sleep(300); }
+     else await sleep((it.ball.interval_s??3)*1000);
+     if(this._run!==run)return;
+   }
+   this.bi=0;
+   log("Drill fini — pause "+(d.pause_after_s??0)+"s.");
+   await sleep((d.pause_after_s??0)*1000); if(this._run!==run)return;
+   setState("waiting");$("ballInfo").textContent="▶︎ Relancer ou ⏭ Drill suivant";
+   const nx=this.session.drills[this.i+1];if(nx)renderCourt(nx,"À suivre — "+(nx.name||"Drill "+(this.i+2)));},
  _verdict:null,
  awaitVerdict(ball){const row=$("verdictRow");if(row)row.style.display="flex";
    const lbl=ball.tag||("speed"+ball.speed+" arc"+ball.arc+" drop"+ball.dropPoint);
@@ -475,9 +495,9 @@ const HUB={url:"",tok:"",iv:null,lastCmd:"",
    const raw=await(await fetch(this.q("command"),{cache:"no-store"})).json();
    const c=(raw&&typeof raw==="object")?raw.cmd:raw;   // accepte {"cmd":"next"} ou "next"
    if(c&&c!==this.lastCmd){this.lastCmd=c;log("hub command: "+c);
-     if(c==="next")ENGINE.next();else if(c==="pause")ENGINE.pause();
+     if(c==="next")ENGINE.nextDrill();else if(c==="pause")ENGINE.pause();
      else if(c==="stop")ENGINE.stop();else if(c==="reload")pullDrills();
-     else if(c==="play")ENGINE.next();
+     else if(c==="play")ENGINE.togglePlay();
      this.put("command",{cmd:"idle"});}
    }catch(e){}},
 };
@@ -644,13 +664,15 @@ function renderCourt(d,label){
 }
 
 /* ===== câblage UI ===== */
-function enableControls(){["btnNext","btnPause","btnStop","btnReload"].forEach(id=>$(id).disabled=false);
-  if(ENGINE.session)setState("waiting");}
+function enableControls(){["btnPlay","btnPrev","btnNext","btnStop","btnReload"].forEach(id=>$(id).disabled=false);
+  if(ENGINE.session)ENGINE.select(ENGINE.i<0?0:ENGINE.i,true);}
 $("btnConnect").onclick=()=>BLE.connect().catch(e=>log("connexion: "+e,"err"));
 $("ballSel").onchange=()=>{ if(_viewDrill) renderCourt(_viewDrill,_viewLabel); };
 $("btnLoad").onclick=()=>ENGINE.load($("drills").value);
-$("btnNext").onclick=()=>ENGINE.next();
-$("btnPause").onclick=()=>ENGINE.pause();
+$("btnPlay").onclick=()=>ENGINE.togglePlay();
+$("btnPrev").onclick=()=>ENGINE.prevDrill();
+$("btnNext").onclick=()=>ENGINE.nextDrill();
+$("drillSel").onchange=()=>ENGINE.select(parseInt($("drillSel").value,10));
 $("btnStop").onclick=()=>ENGINE.stop();
 $("btnMotor").onclick=()=>motorOn();
 $("btnCalibLoad").onclick=()=>loadCalib();
@@ -674,7 +696,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v2.4 · 2026-10-28";   // bump à chaque modif
+const APP_VERSION="v2.5 · 2026-10-28";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
