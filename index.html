@@ -2,701 +2,386 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Exercices Pongbot</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Court Coach</title>
 <style>
-:root {
-  --bg: #f4f5f1;
-  --surface: #ffffff;
-  --surface-2: #eef0ea;
-  --text: #1c211b;
-  --muted: #646b61;
-  --border: #dde1d6;
-  --accent: #2f7d4f;
-  --accent-soft: #e1efe5;
-  --court: #2f6b8f;
-  --court-line: rgba(255,255,255,.85);
-  --topspin: #2f9e5a;
-  --slice: #3a6fd8;
-  --flat: #8a8f86;
-  --shadow: 0 1px 2px rgba(20,30,20,.06), 0 4px 16px rgba(20,30,20,.05);
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #121512; --surface: #1b1f1b; --surface-2: #242a24; --text: #e7ebe4; --muted: #9aa396;
-    --border: #2f362f; --accent: #5cc286; --accent-soft: #1f3327; --court: #24506b;
-    --topspin: #5cc286; --slice: #6f9cf0; --flat: #9aa396; --shadow: none;
-  }
-}
-:root[data-theme="dark"] {
-  --bg: #121512; --surface: #1b1f1b; --surface-2: #242a24; --text: #e7ebe4; --muted: #9aa396;
-  --border: #2f362f; --accent: #5cc286; --accent-soft: #1f3327; --court: #24506b;
-  --topspin: #5cc286; --slice: #6f9cf0; --flat: #9aa396; --shadow: none;
-}
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-header { padding: 28px 24px 8px; max-width: 1280px; margin: 0 auto; }
-h1 { margin: 0; font-size: 26px; letter-spacing: -.01em; }
-.sub { color: var(--muted); margin-top: 4px; }
-[hidden] { display: none !important; }
-.toolbar { background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
-.toolbar-inner { max-width: 1280px; margin: 0 auto; padding: 12px 24px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 5px 11px; border-radius: 999px; font: inherit; font-size: 13px; cursor: pointer; }
-.chip .n { color: var(--muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
-.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-.chip[aria-pressed="true"] .n { color: rgba(255,255,255,.8); }
-input[type="search"] { flex: 1 1 220px; min-width: 0; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; }
-.count { color: var(--muted); font-size: 13px; margin-left: auto; }
-main { max-width: 1280px; margin: 0 auto; padding: 20px 24px 60px; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; cursor: pointer; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; text-align: left; font: inherit; color: inherit; }
-.card:hover { border-color: var(--accent); }
-.card h3 { margin: 0; font-size: 15px; line-height: 1.3; }
-.meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; color: var(--muted); }
-.badge { padding: 2px 8px; border-radius: 6px; background: var(--surface-2); color: var(--text); font-size: 12px; }
-.badge.grade { font-weight: 600; color: #fff; background: var(--gc); }
-.grade-1 { --gc: #3d9a5f; } .grade-2 { --gc: #c49a1a; } .grade-3 { --gc: #d9702b; } .grade-4 { --gc: #c43d3d; }
-.meter { display: grid; grid-template-columns: 70px 1fr 34px; gap: 8px; align-items: center; font-size: 12.5px; margin-top: 6px; }
-.meter .bar { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
-.meter .bar i { display: block; height: 100%; background: var(--accent); }
-.meter span:last-child { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
-.modes { display: flex; flex-wrap: wrap; gap: 8px; }
-.mode { border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 12px; padding: 9px 14px; font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
-.mode small { display: block; font-weight: 400; color: var(--muted); font-size: 12px; }
-.mode[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-.mode[aria-pressed="true"] small { color: rgba(255,255,255,.8); }
-.pos-row { align-items: flex-start; }
-#pos-court svg { width: 92px; height: auto; display: block; cursor: pointer; }
-.chip.unofficial { opacity: .55; }
-.version-note { font-size: 12.5px; color: var(--muted); margin: 0 0 10px; }
-.badge.warn { background: #fdecea; color: #b3261e; font-weight: 600; }
-.warn-note { font-size: 12.5px; color: #b3261e; background: #fdecea; border-radius: 8px; padding: 8px 10px; margin: 0 0 12px; }
-.badge.sport { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
-.tags { display: flex; flex-wrap: wrap; gap: 4px; }
-.tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
-.mini { width: 100%; height: auto; display: block; border-radius: 8px; }
-.empty { color: var(--muted); padding: 40px 0; text-align: center; }
-.more { display: block; margin: 20px auto 0; }
-
-dialog { border: none; padding: 0; border-radius: 18px; width: min(1080px, calc(100vw - 32px)); max-height: calc(100vh - 32px); background: var(--surface); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
-dialog::backdrop { background: rgba(10,15,10,.45); }
-.dlg-head { display: flex; gap: 12px; align-items: flex-start; padding: 20px 22px 12px; border-bottom: 1px solid var(--border); }
-.dlg-head h2 { margin: 0; font-size: 20px; }
-.close { margin-left: auto; border: none; background: var(--surface-2); color: var(--text); width: 32px; height: 32px; border-radius: 50%; font-size: 18px; cursor: pointer; flex: none; }
-.dlg-body { padding: 16px 22px 22px; display: grid; grid-template-columns: 300px 1fr; gap: 20px; }
-  .dlg-body > * { min-width: 0; }
-@media (max-width: 760px) { .dlg-body { grid-template-columns: 1fr; } }
-.controls { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 12px; }
-.seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-.seg button { border: none; background: var(--surface); color: var(--text); padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
-.seg button + button { border-left: 1px solid var(--border); }
-.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-.label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
-table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
-th, td { padding: 7px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
-th { background: var(--surface-2); font-weight: 600; font-size: 12px; color: var(--muted); }
-th:nth-child(2), td:nth-child(2) { text-align: left; }
-tr:last-child td { border-bottom: none; }
-.dot { display: inline-block; width: 18px; height: 18px; border-radius: 50%; color: #fff; font-size: 11px; line-height: 18px; text-align: center; font-weight: 700; }
-.kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 13px; margin-top: 14px; }
-.note { font-size: 11.5px; color: var(--muted); margin: 6px 0 0; }
-.kv dt { color: var(--muted); }
-.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
-.legend { display: flex; gap: 12px; font-size: 12px; color: var(--muted); margin-top: 8px; flex-wrap: wrap; }
-.legend span::before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; background: var(--c); }
-h4 { margin: 18px 0 6px; font-size: 13px; }
-@media (max-width: 600px) {
-  header, .toolbar-inner, main { padding-left: 16px; padding-right: 16px; }
-  .dlg-head, .dlg-body { padding-left: 16px; padding-right: 16px; }
-}
+  :root { --bg:#0e1116; --card:#171c24; --fg:#e6edf3; --mut:#8b97a7; --acc:#3fb950;
+          --warn:#d29922; --err:#f85149; --line:#242c38; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font:15px/1.4 -apple-system,system-ui,Segoe UI,Roboto,sans-serif; padding:12px 16px 40px; }
+  h1 { font-size:18px; margin:4px 0 12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px;
+          padding:14px; margin-bottom:12px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; }
+  button { flex:1 1 auto; min-width:90px; padding:14px 10px; font-size:16px; font-weight:600;
+           border:none; border-radius:10px; background:#222b38; color:var(--fg); }
+  button:active { filter:brightness(1.3); }
+  button.primary { background:var(--acc); color:#06210d; }
+  button.big { flex-basis:100%; padding:20px; font-size:20px; }
+  button:disabled { opacity:.4; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; font-weight:700; }
+  .s-idle{background:#30363d;color:var(--mut)} .s-playing{background:var(--acc);color:#06210d}
+  .s-waiting{background:var(--warn);color:#2a1d00} .s-paused{background:#30363d;color:var(--fg)}
+  .s-off{background:var(--err);color:#2a0607}
+  label { color:var(--mut); font-size:12px; display:block; margin:8px 0 3px; }
+  input, textarea { width:100%; background:#0e141c; color:var(--fg); border:1px solid var(--line);
+                    border-radius:8px; padding:9px; font:13px ui-monospace,Menlo,monospace; }
+  textarea { height:160px; resize:vertical; }
+  .mut { color:var(--mut); font-size:13px; }
+  .big-status { font-size:22px; font-weight:800; margin:2px 0; }
+  #log { height:150px; overflow:auto; background:#0b0f14; border:1px solid var(--line);
+         border-radius:8px; padding:8px; font:11px/1.35 ui-monospace,Menlo,monospace; color:#9fb0c3; }
+  details summary { cursor:pointer; color:var(--mut); }
+  .warn { color:var(--warn); } .err { color:var(--err); } .ok { color:var(--acc); }
+  #court svg { width:100%; max-width:300px; height:auto; display:block; margin:2px auto; }
+  .legend { font-size:11px; color:var(--mut); display:flex; gap:12px; justify-content:center; margin-top:4px; }
+  .legend i { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:4px; vertical-align:-1px; }
 </style>
 </head>
 <body>
-<header>
-  <h1>Exercices Pongbot</h1>
-  <div class="sub" id="summary"></div>
-</header>
-<div class="toolbar">
-  <div class="toolbar-inner">
-    <div class="modes" id="modes"></div>
+<h1>🎾 Court Coach <span id="state" class="pill s-off">déconnecté</span></h1>
+
+<div class="card">
+  <div class="big-status" id="drillName">—</div>
+  <div class="mut" id="ballInfo">aucune session chargée</div>
+  <div class="row" style="margin-top:12px">
+    <button id="btnNext" class="primary big" disabled>▶︎ Next drill</button>
   </div>
-  <div class="toolbar-inner" style="padding-top:0" id="sub-row">
-    <div class="chips" id="sections"></div>
-  </div>
-  <div class="toolbar-inner pos-row" style="padding-top:0" id="pos-row">
-    <div id="pos-court"></div>
-    <div><div class="label">Position du robot</div><div class="chips" id="positions"></div></div>
-  </div>
-  <div class="toolbar-inner" style="padding-top:0">
-    <div class="chips" id="themes"></div>
-  </div>
-  <div class="toolbar-inner" style="padding-top:0">
-    <div class="chips" id="grades"></div>
-  </div>
-  <div class="toolbar-inner" style="padding-top:0">
-    <div class="chips" id="strokes"></div>
-    <input type="search" id="q" placeholder="Rechercher un exercice, un type de balle, un id…">
-    <span class="count" id="count"></span>
+  <div class="row" style="margin-top:8px">
+    <button id="btnPause" disabled>⏸ Pause</button>
+    <button id="btnStop" disabled>⏹ Stop</button>
+    <button id="btnReload" disabled>⟳ Reload drills</button>
   </div>
 </div>
-<main>
-  <div class="grid" id="grid"></div>
-  <div class="empty" id="empty" hidden>Aucun exercice ne correspond.</div>
-  <button class="chip more" id="more" hidden>Afficher plus</button>
-</main>
 
-<dialog id="dlg">
-  <div class="dlg-head">
-    <div>
-      <h2 id="d-title"></h2>
-      <div class="meta" id="d-meta" style="margin-top:6px"></div>
-    </div>
-    <button class="close" id="d-close" aria-label="Fermer">×</button>
-  </div>
-  <div class="dlg-body">
-    <div>
-      <div id="d-court"></div>
-      <div class="legend">
-        <span style="--c:var(--topspin)">Lift</span>
-        <span style="--c:var(--slice)">Coupé</span>
-        <span style="--c:var(--flat)">Sans effet</span>
-      </div>
-      <div id="d-profile" style="margin-top:10px"></div>
-      <p class="note">Rebonds et trajectoires calculés avec le modèle de libPaceRobot (traînée + effet Magnus). Géométrie du robot selon sa position (P_robot_cfg). Contour pointillé rouge = faute (n'atteint pas le filet, ou trop large) ; orange = passe sous la hauteur du filet du modèle (0,949 m), à vérifier ; une balle derrière la ligne de fond reste une balle profonde normale. La bande montre la plage aléatoire gauche/droite.</p>
-      <div id="d-rating"></div>
-      <dl class="kv" id="d-kv"></dl>
-    </div>
-    <div>
-      <p class="warn-note" id="d-warn" hidden></p>
-      <div class="controls" id="d-controls"></div>
-      <div class="table-wrap"><table id="d-table"></table></div>
-      <div id="d-zones"></div>
-    </div>
-  </div>
-</dialog>
+<div class="card">
+  <div class="mut" id="courtLabel">Aperçu du drill</div>
+  <div id="court"></div>
+  <div class="legend"><span><i style="background:#5cc286"></i>lift</span><span><i style="background:#e0b84c"></i>coupé</span><span><i style="background:#9aa7b4"></i>à plat</span><span><i style="background:#fff;border:1px solid #888"></i>robot</span></div>
+</div>
 
-<!-- Cache-busted so a rebuilt data.js shows up on a simple reload. -->
-<script>document.write(`<script src="data.js?${Date.now()}"><\/script>`);</script>
+<div class="card">
+  <div class="row">
+    <button id="btnConnect" class="primary">🔌 Connecter le robot</button>
+  </div>
+  <div class="mut" id="dev" style="margin-top:8px">Non connecté. (HTTPS + Bluefy/Chrome requis.)</div>
+  <label style="margin-top:10px"><input type="checkbox" id="dry" checked style="width:auto"> Mode dry-run (ne tire pas — log seulement)</label>
+</div>
+
+<div class="card">
+  <label>Bibliothèque (dossiers d'entraînement)</label>
+  <div id="library" class="mut">(vide — pousse une bibliothèque via le skill)</div>
+</div>
+
+<div class="card">
+  <label>Drills (session JSON) — collés par toi ou poussés par le LLM</label>
+  <textarea id="drills" spellcheck="false"></textarea>
+  <div class="row" style="margin-top:8px">
+    <button id="btnLoad">Charger ce JSON</button>
+  </div>
+</div>
+
+<details class="card">
+  <summary>⚙️ Hub (Firebase) & aide</summary>
+  <label>URL Realtime Database (ex. https://xxx.firebaseio.com)</label>
+  <input id="hubUrl" placeholder="(vide = mode local, boutons seulement)">
+  <label>Token / secret (auth=…)</label>
+  <input id="hubTok" placeholder="(optionnel selon tes règles)">
+  <div class="row" style="margin-top:8px"><button id="btnHub">Activer le hub</button></div>
+  <p class="mut">Le hub permet à l'Apple Watch de faire « next » et au LLM de pousser les
+  drills à distance. Sans hub, tout marche en local avec les boutons ci-dessus.<br>
+  Watch Shortcut : <code>PUT &lt;url&gt;/command.json</code>, corps <b>JSON</b> <code>{"cmd":"next"}</code>.</p>
+</details>
+
+<div class="card">
+  <label>Journal</label>
+  <div id="log"></div>
+</div>
+
 <script>
-const SECTION_LABELS = {
-  programmes_sysGroup: "Programmes",
-  serve: "Service",
-  test: "Coups unitaires",
-  inner: "Internes",
-  mes_dossiers: "Mes dossiers",
-  mes_groupes: "Mes groupes",
-  custom: "Mes custom",
-  recovery_trigger: "Récupération",
-  ptags_aura: "Aura",
-  smart_match_ptags: "Smart match",
-  adaptive_rally: "Adaptive Rally",
+/* ===== MD5 (blueimp, compact, ASCII/UTF-8) ===== */
+var md5=(function(){function s(n,t){return n<<t|n>>>32-t}function a(n,t){var r,e,o,u,c;
+return o=2147483648&n,u=2147483648&t,r=1073741824&n,e=1073741824&t,c=(1073741823&n)+(1073741823&t),
+r&e?2147483648^c^o^u:r|e?1073741824&c?3221225472^c^o^u:1073741824^c^o^u:c^o^u}
+function f(n,t,r){return n&t|~n&r}function g(n,t,r){return n&r|t&~r}function h(n,t,r){return n^t^r}
+function i(n,t,r){return t^(n|~r)}function j(n,t,r,e,o,u,c){return n=a(n,a(a(f(t,r,e),o),c)),a(s(n,u),t)}
+function k(n,t,r,e,o,u,c){return n=a(n,a(a(g(t,r,e),o),c)),a(s(n,u),t)}
+function l(n,t,r,e,o,u,c){return n=a(n,a(a(h(t,r,e),o),c)),a(s(n,u),t)}
+function m(n,t,r,e,o,u,c){return n=a(n,a(a(i(t,r,e),o),c)),a(s(n,u),t)}
+function o(n){for(var t,r=n.length,e=r+8,o=16*((e-e%64)/64+1),u=Array(o-1),c=0,d=0;d<r;)
+t=(d-d%4)/4,c=d%4*8,u[t]=u[t]|n.charCodeAt(d)<<c,d++;return t=(d-d%4)/4,c=d%4*8,
+u[t]=u[t]|128<<c,u[o-2]=r<<3,u[o-1]=r>>>29,u}
+function p(n){var t,r="",e="";for(t=0;t<=3;t++)e=n>>>8*t&255,r+=("0"+e.toString(16)).slice(-2);return r}
+function q(n){n=n.replace(/\r\n/g,"\n");for(var t="",r=0;r<n.length;r++){var e=n.charCodeAt(r);
+e<128?t+=String.fromCharCode(e):e>127&&e<2048?(t+=String.fromCharCode(e>>6|192),
+t+=String.fromCharCode(63&e|128)):(t+=String.fromCharCode(e>>12|224),
+t+=String.fromCharCode(e>>6&63|128),t+=String.fromCharCode(63&e|128))}return t}
+return function(n){var t,r,e,u,c,d,f,g,h,i=[];for(n=q(n),i=o(n),d=1732584193,f=4023233417,
+g=2562383102,h=271733878,t=0;t<i.length;t+=16)r=d,e=f,u=g,c=h,d=j(d,f,g,h,i[t],7,3614090360),
+h=j(h,d,f,g,i[t+1],12,3905402710),g=j(g,h,d,f,i[t+2],17,606105819),f=j(f,g,h,d,i[t+3],22,3250441966),
+d=j(d,f,g,h,i[t+4],7,4118548399),h=j(h,d,f,g,i[t+5],12,1200080426),g=j(g,h,d,f,i[t+6],17,2821735955),
+f=j(f,g,h,d,i[t+7],22,4249261313),d=j(d,f,g,h,i[t+8],7,1770035416),h=j(h,d,f,g,i[t+9],12,2336552879),
+g=j(g,h,d,f,i[t+10],17,4294925233),f=j(f,g,h,d,i[t+11],22,2304563134),d=j(d,f,g,h,i[t+12],7,1804603682),
+h=j(h,d,f,g,i[t+13],12,4254626195),g=j(g,h,d,f,i[t+14],17,2792965006),f=j(f,g,h,d,i[t+15],22,1236535329),
+d=k(d,f,g,h,i[t+1],5,4129170786),h=k(h,d,f,g,i[t+6],9,3225465664),g=k(g,h,d,f,i[t+11],14,643717713),
+f=k(f,g,h,d,i[t],20,3921069994),d=k(d,f,g,h,i[t+5],5,3593408605),h=k(h,d,f,g,i[t+10],9,38016083),
+g=k(g,h,d,f,i[t+15],14,3634488961),f=k(f,g,h,d,i[t+4],20,3889429448),d=k(d,f,g,h,i[t+9],5,568446438),
+h=k(h,d,f,g,i[t+14],9,3275163606),g=k(g,h,d,f,i[t+3],14,4107603335),f=k(f,g,h,d,i[t+8],20,1163531501),
+d=k(d,f,g,h,i[t+13],5,2850285829),h=k(h,d,f,g,i[t+2],9,4243563512),g=k(g,h,d,f,i[t+7],14,1735328473),
+f=k(f,g,h,d,i[t+12],20,2368359562),d=l(d,f,g,h,i[t+5],4,4294588738),h=l(h,d,f,g,i[t+8],11,2272392833),
+g=l(g,h,d,f,i[t+11],16,1839030562),f=l(f,g,h,d,i[t+14],23,4259657740),d=l(d,f,g,h,i[t+1],4,2763975236),
+h=l(h,d,f,g,i[t+4],11,1272893353),g=l(g,h,d,f,i[t+7],16,4139469664),f=l(f,g,h,d,i[t+10],23,3200236656),
+d=l(d,f,g,h,i[t+13],4,681279174),h=l(h,d,f,g,i[t],11,3936430074),g=l(g,h,d,f,i[t+3],16,3572445317),
+f=l(f,g,h,d,i[t+6],23,76029189),d=l(d,f,g,h,i[t+9],4,3654602809),h=l(h,d,f,g,i[t+12],11,3873151461),
+g=l(g,h,d,f,i[t+15],16,530742520),f=l(f,g,h,d,i[t+2],23,3299628645),d=m(d,f,g,h,i[t],6,4096336452),
+h=m(h,d,f,g,i[t+7],10,1126891415),g=m(g,h,d,f,i[t+14],15,2878612391),f=m(f,g,h,d,i[t+5],21,4237533241),
+d=m(d,f,g,h,i[t+12],6,1700485571),h=m(h,d,f,g,i[t+3],10,2399980690),g=m(g,h,d,f,i[t+10],15,4293915773),
+f=m(f,g,h,d,i[t+1],21,2240044497),d=m(d,f,g,h,i[t+8],6,1873313359),h=m(h,d,f,g,i[t+15],10,4264355552),
+g=m(g,h,d,f,i[t+6],15,2734768916),f=m(f,g,h,d,i[t+13],21,1309151649),d=m(d,f,g,h,i[t+4],6,4149444226),
+h=m(h,d,f,g,i[t+11],10,3174756917),g=m(g,h,d,f,i[t+2],15,718787259),f=m(f,g,h,d,i[t+9],21,3951481745),
+d=a(d,r),f=a(f,e),g=a(g,u),h=a(h,c);return(p(d)+p(f)+p(g)+p(h)).toLowerCase()}})();
+
+/* ===== Protocole robot (vérifié) ===== */
+const SERVICE="02f00000-0000-0000-0000-00000000ffe0";
+const CH_WRITE="02f00000-0000-0000-0000-00000000ff01";
+const CH_NOTIFY="02f00000-0000-0000-0000-00000000ff02";
+const SCR_TABLE="Mjgx1jAwXDBaMFcxCz3JBgNVBAYT4kJF7Rkw"; // scramble (36)
+const SPIN={flat:0,topspin:1,backspin:2,0:0,1:1,2:2};
+
+function crc16(bytes){let c=0xFFFF;for(const b of bytes){c^=b;for(let i=0;i<8;i++)c=(c&1)?(c>>>1)^0xA001:c>>>1;}return c&0xFFFF;}
+function buildFrame(op,data=[]){const payload=[op,data.length&0xff,(data.length>>8)&0xff,...data];
+  const len=payload.length+2;const inner=[len&0xff,(len>>8)&0xff,...payload];const c=crc16(inner);
+  return Uint8Array.from([0x41,0x14,...inner,c&0xff,(c>>8)&0xff]);}
+function parseRx(f){if(f.length<8||f[0]!==0x45||f[1]!==0x54)return null;const inner=f.slice(2,-2);
+  if(crc16(inner)!==(f[f.length-2]|f[f.length-1]<<8))return null;
+  const status=inner[2],op=inner[3],dl=inner[4]|inner[5]<<8;return{op,status,data:inner.slice(6,6+dl)};}
+function scramble(str){let o="";for(let i=0;i<str.length;i++)o+=SCR_TABLE[str.charCodeAt(i)%36];return o;}
+function handshakeKey(sn,code){return md5(sn+scramble(sn)+code);} // MD5(sn+scramble(sn)+code)
+
+/* ===== UI helpers ===== */
+const $=id=>document.getElementById(id);
+function log(m,cls){const d=$("log");const t=new Date().toLocaleTimeString();
+  d.innerHTML+=`<div class="${cls||''}">${t} ${m}</div>`;d.scrollTop=d.scrollHeight;}
+function setState(s){const map={idle:["s-idle","idle"],playing:["s-playing","en cours"],
+  waiting:["s-waiting","attente (tap next)"],paused:["s-paused","pause"],off:["s-off","déconnecté"]};
+  const[c,t]=map[s]||map.off;const e=$("state");e.className="pill "+c;e.textContent=t;ENGINE.state=s;
+  if(HUB.url)HUB.put("status",{state:s,drill:ENGINE.i,name:ENGINE.cur?.name||null});}
+
+/* ===== BLE ===== */
+const BLE={dev:null,wr:null,verified:false,rxbuf:[],
+ async connect(){
+   if(!navigator.bluetooth){log("Web Bluetooth indisponible (utilise Bluefy sur iOS, Chrome ailleurs, en HTTPS).","err");return;}
+   log("Scan PACE…");
+   this.dev=await navigator.bluetooth.requestDevice({filters:[{namePrefix:"PACE"}],optionalServices:[SERVICE]});
+   this.dev.addEventListener("gattserverdisconnected",()=>{setState("off");log("Robot déconnecté.","warn");});
+   const g=await this.dev.gatt.connect();const s=await g.getPrimaryService(SERVICE);
+   this.wr=await s.getCharacteristic(CH_WRITE);const n=await s.getCharacteristic(CH_NOTIFY);
+   await n.startNotifications();n.addEventListener("characteristicvaluechanged",e=>this.onNotify(new Uint8Array(e.target.value.buffer)));
+   $("dev").textContent="Connecté : "+(this.dev.name||this.dev.id);log("Connecté + notify abonné.","ok");
+   await this.send(0x07); // handshake challenge
+   keepAwake();
+ },
+ async send(op,data=[]){const f=buildFrame(op,data);for(let k=0;k<f.length;k+=252)
+   await this.wr.writeValueWithResponse(f.slice(k,k+252));},
+ onNotify(bytes){this.rxbuf.push(...bytes);
+   // extraction trame RX (45 54)
+   while(true){const j=this.rxbuf.findIndex((b,k)=>b===0x45&&this.rxbuf[k+1]===0x54);
+     if(j<0||this.rxbuf.length<j+4)break;const len=this.rxbuf[j+2]|this.rxbuf[j+3]<<8;const tot=4+len;
+     if(j+tot>this.rxbuf.length)break;const raw=Uint8Array.from(this.rxbuf.slice(j,j+tot));
+     this.rxbuf.splice(0,j+tot);const r=parseRx(raw);if(!r)continue;
+     if(r.op===0x07)this.onChallenge(r.data);}
+ },
+ onChallenge(d){try{const snL=d[0],cL=d[1];
+   const sn=new TextDecoder().decode(d.slice(2,2+snL));
+   const code=new TextDecoder().decode(d.slice(2+snL,2+snL+cL));
+   const key=handshakeKey(sn,code);log("challenge sn="+sn+" → clé "+key.slice(0,8)+"…","ok");
+   this.send(0x08,[...new TextEncoder().encode(key)]).then(()=>{this.verified=true;
+     log("handshake envoyé ✔","ok");enableControls();});
+ }catch(e){log("challenge illisible: "+e,"err");}}
 };
-const PAGE = 120;
-const SUSPECT_NOTE = "Données douteuses : au moins une balle (vitesse 0.5, arc 98) ne peut pas passer le filet depuis la position du robot. Ce sont probablement des valeurs de test côté serveur.";
 
-// Themes derived from words in drill names (the export has no categories). A drill can have several.
-const THEMES = [
-  ["Fond de court", /baseline|baselin\b|deep/],
-  ["Mi-court", /midcourt/],
-  ["Filet / volée", /volley|vollley|net\b|approa[cs]h|body shot/],
-  ["Smash", /smash/],
-  ["Déplacement", /moving|sideways|footwork|back and forth|movement|side-to-side|2 point|six point|continuous/],
-  ["Point fixe", /fixed-point/],
-  ["Attaque", /offensive/],
-  ["Défense", /defen[cs]e|defensive|counterattack/],
-  ["Lift", /topspin/],
-  ["Coupé", /underspin|slice|backspin/],
-  ["Aléatoire / match", /random|complex|general/],
-  ["Récupération", /recovery/],
-];
-const STROKES = [["Coup droit", /forehand|\(f\)/], ["Revers", /backhand|\(b\)/]];
+/* ===== Moteur de session ===== */
+const ENGINE={session:null,i:-1,cur:null,state:"off",timer:null,
+ load(json){try{const s=typeof json==="string"?JSON.parse(json):json;
+   if(!s.drills||!Array.isArray(s.drills))throw"pas de 'drills'";this.session=s;this.i=-1;
+   $("drillName").textContent=s.name||"Session";
+   $("ballInfo").textContent=s.drills.length+" drills prêts";
+   enableControls();setState(BLE.verified?"waiting":"idle");
+   if(s.drills[0])renderCourt(s.drills[0],"Aperçu — "+(s.drills[0].name||"Drill 1"));
+   log("Session chargée: "+s.drills.length+" drills.","ok");}catch(e){log("JSON invalide: "+e,"err");}},
+ async next(){if(!this.session)return;if(this.state==="playing")return;
+   this.i++;if(this.i>=this.session.drills.length){log("Session terminée.","ok");setState("idle");this.i=-1;return;}
+   this.cur=this.session.drills[this.i];await this.playDrill(this.cur);},
+ async playDrill(d){setState("playing");$("drillName").textContent=d.name||("Drill "+(this.i+1));
+   renderCourt(d,"En cours — "+(d.name||("Drill "+(this.i+1))));
+   const reps=d.repeat||1;
+   for(let r=0;r<reps;r++){for(let b=0;b<d.balls.length;b++){
+     if(this.state!=="playing"){log("interrompu");return;}
+     const ball=d.balls[b];$("ballInfo").textContent=`balle ${b+1}/${d.balls.length}`+(reps>1?` (rep ${r+1}/${reps})`:"");
+     await fireBall(ball);
+     await sleep((ball.interval_s??3)*1000);
+   }}
+   log("Drill fini — pause "+(d.pause_after_s??0)+"s puis WAITING.");
+   await sleep((d.pause_after_s??0)*1000);
+   setState("waiting");$("ballInfo").textContent="tape ▶︎ Next drill";
+   const nx=this.session&&this.session.drills[this.i+1];
+   if(nx)renderCourt(nx,"À suivre — "+(nx.name||"Drill "+(this.i+2)));},
+ pause(){if(this.state==="playing"){setState("paused");log("pause");}},
+ stop(){this.state="idle";this.i=-1;setState("idle");$("ballInfo").textContent="stop";log("stop");}
+};
+const sleep=ms=>new Promise(r=>{ENGINE.timer=setTimeout(r,ms);});
 
-const spinColor = s => s.startsWith("lift") ? "var(--topspin)" : s.startsWith("coupé") ? "var(--slice)" : "var(--flat)";
-const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+/* ===== SEAM : tir d'une balle (format d'octets à brancher après capture) ===== */
+async function fireBall(ball){
+  const p=`speed=${ball.speed} arc=${ball.arc} spin=${ball.spin} rot=${ball.rotationSpeed} drop=${ball.dropPoint}`;
+  if($("dry").checked||!BLE.verified){log("DRY fireBall("+p+")");return;}
+  // TODO: encoder les 24 octets + opcode (0x80/0x81 ou 0x46) une fois la capture faite,
+  //       puis: await BLE.send(OPCODE, bytes);
+  log("fireBall("+p+") — format réel non branché (fais une capture).","warn");
+}
 
-const drills = [];
-for (const section of window.PONGBOT_DATA) {
-  for (const d of section.drills) {
-    d.section = section.name;
-    // Star levels are copies of the same drill by default: keep only the lowest star available.
-    const stars = d.variants.map(v => v.difficulty).filter(Boolean).sort();
-    if (stars.length) d.variants = d.variants.filter(v => v.difficulty === stars[0]);
-    // The user is right-handed: keep only the right-hand version when there is one.
-    if (d.variants.some(v => v.hand === "R")) d.variants = d.variants.filter(v => v.hand === "R");
-    // Some Service drills (T Serve) store one sequence split in several ★ parts: the app plays them as one.
-    if (d.variants.length > 1 && d.variants.every(v => v.difficulty)) {
-      d.variants = [{ ...d.variants[0], balls: d.variants.flatMap(v => v.balls) }];
+/* ===== Hub (Firebase RTDB en REST, poll 1s) ===== */
+const HUB={url:"",tok:"",iv:null,lastCmd:"",
+ start(url,tok){this.url=url.replace(/\/$/,"");this.tok=tok;clearInterval(this.iv);
+   if(!this.url){log("Hub désactivé (mode local).");return;}
+   this.iv=setInterval(()=>this.poll(),1000);log("Hub activé: "+this.url,"ok");
+   pullDrills();},   // charge biblio + séance active à l'ouverture
+ q(path){return this.url+"/"+path+".json"+(this.tok?("?auth="+encodeURIComponent(this.tok)):"");},
+ async put(path,val){try{await fetch(this.q(path),{method:"PUT",body:JSON.stringify(val)});}catch(e){}},
+ async poll(){try{
+   const raw=await(await fetch(this.q("command"),{cache:"no-store"})).json();
+   const c=(raw&&typeof raw==="object")?raw.cmd:raw;   // accepte {"cmd":"next"} ou "next"
+   if(c&&c!==this.lastCmd){this.lastCmd=c;log("hub command: "+c);
+     if(c==="next")ENGINE.next();else if(c==="pause")ENGINE.pause();
+     else if(c==="stop")ENGINE.stop();else if(c==="reload")pullDrills();
+     else if(c==="play")ENGINE.next();
+     this.put("command",{cmd:"idle"});}
+   }catch(e){}},
+};
+function renderLibrary(lib){
+  const el=$("library");
+  if(!lib||!Array.isArray(lib.folders)||!lib.folders.length){el.textContent="(vide — pousse une bibliothèque via le skill)";return;}
+  el.innerHTML="";
+  for(const f of lib.folders){
+    const d=document.createElement("details");d.style.margin="6px 0";
+    const sm=document.createElement("summary");sm.textContent=f.name+" ("+(f.sessions?f.sessions.length:0)+")";
+    sm.style.fontWeight="600";d.appendChild(sm);
+    for(const s of (f.sessions||[])){
+      const b=document.createElement("button");b.textContent="▶ "+(s.name||"séance");
+      b.style.cssText="display:block;width:100%;text-align:left;margin:4px 0;padding:10px 12px";
+      b.onclick=()=>{ENGINE.load(s);window.scrollTo({top:0,behavior:"smooth"});log("Séance activée : "+(s.name||""),"ok");};
+      d.appendChild(b);
     }
-    d.variants.forEach(v => v.balls.forEach(b => { b.pos = Number(d.position) || 0; }));
-    d.tags = [...new Set(d.variants.flatMap(v => v.balls.map(b => b.tag).filter(Boolean)))];
-    const name = d.name.toLowerCase();
-    d.themes = THEMES.filter(([, re]) => re.test(name)).map(([label]) => label);
-    d.strokes = STROKES.filter(([, re]) => re.test(name)).map(([label]) => label);
-    if (!d.strokes.length) d.strokes = ["Non précisé"];
-    d.haystack = [d.name, d.id, d.code, d.sport, ...d.tags].join(" ").toLowerCase();
-    drills.push(d);
+    el.appendChild(d);
   }
 }
+async function pullDrills(){try{
+  const lib=await fetch(HUB.q("library"),{cache:"no-store"}).then(r=>r.json()).catch(()=>null);
+  if(lib)renderLibrary(lib);
+  const d=await fetch(HUB.q("drills"),{cache:"no-store"}).then(r=>r.json()).catch(()=>null);
+  if(d){$("drills").value=JSON.stringify(d,null,2);ENGINE.load(d);}
+}catch(e){log("pull: "+e,"err");}}
 
-// Browsing follows the app: pick a mode, then (for programmes) the robot position, then the exercise.
-const MODES = [
-  { id: "robot", label: "Programmes", hint: "position du robot → exercice", sections: ["programmes_sysGroup"], positions: true },
-  { id: "ptags", label: "PTags", hint: "capteurs de position", sections: ["recovery_trigger", "smart_match_ptags"] },
-  { id: "tserve", label: "T Serve", hint: "service puis échange", sections: ["serve"] },
-  { id: "mine", label: "Mes exercices", hint: "custom, dossiers, groupes", sections: ["custom", "mes_dossiers", "mes_groupes"] },
-  { id: "other", label: "Autres", hint: "coups unitaires, internes", sections: ["test", "inner"] },
-];
-const state = { mode: "robot", section: "all", pos: 0, theme: "all", grade: "all", stroke: "all", q: "", shown: PAGE };
-const modeOf = () => MODES.find(m => m.id === state.mode);
-const posOf = d => Number(d.position) || 0;
+/* ===== wake lock ===== */
+let _wl=null;async function keepAwake(){try{_wl=await navigator.wakeLock.request("screen");
+  document.addEventListener("visibilitychange",async()=>{if(_wl!==null&&document.visibilityState==="visible")_wl=await navigator.wakeLock.request("screen");});}catch(e){}}
 
-function countBy(list, key) {
-  const m = new Map();
-  for (const d of list) m.set(d[key], (m.get(d[key]) || 0) + 1);
-  return m;
-}
-
-function renderChips(el, entries, current, onPick) {
-  el.innerHTML = entries.map(([value, label, n, cls]) =>
-    `<button class="chip ${cls || ""}" data-v="${esc(value)}" aria-pressed="${value === current}">${esc(label)}<span class="n">${n}</span></button>`
-  ).join("");
-  el.onclick = e => {
-    const b = e.target.closest("button");
-    if (b) onPick(b.dataset.v);
-  };
-}
-
-// One group per exercise name in a section; each robot position has its own official version.
-let groups = [];
-function buildGroups() {
-  const byKey = new Map();
-  for (const d of drills) {
-    let key = d.section + "|" + d.name;
-    // Same name already taken at this position (e.g. several "New Custom Drill"): keep it as its own card.
-    if (byKey.get(key)?.versions[posOf(d)]) key += "|" + d.id;
-    if (!byKey.has(key)) byKey.set(key, { key, section: d.section, name: d.name, versions: {} });
-    byKey.get(key).versions[posOf(d)] = d;
+/* ===== Rendu court (porté du viewer — physique libPaceRobot.so) ===== */
+const TRAJ={G:-9.802,DRAG:0.0164,MAG:0.00035,NET_H:0.949,GROUND_Z:0.0326,X_MAX:5.52,Y_MAX:11.92,LAUNCH_OFF_Z:0.19265};
+const ROBOTP={0:[0,-12.107,0,0],1:[-4.115,-12.107,0,-8],2:[4.115,-12.107,0,8],3:[0,-6.622,0,0],4:[-4.115,6.178,0,-8],5:[4.115,6.178,0,8]};
+const COURTG={half:11.885,singles:4.115,doubles:5.485,service:6.40};
+const spdMs=s=>7+2*Number(s),lDeg=a=>Number(a)*0.4+10,yawD=d=>Number(d)*1.7,spRps=r=>Number(r)*6;
+const spinSign=s=>s==="topspin"?-1:s==="backspin"?1:0;
+const spinCol=s=>s==="topspin"?"#5cc286":s==="backspin"?"#e0b84c":"#9aa7b4";
+function simulate(speed,arc,rot,spin,yaw,pos){
+  const P=ROBOTP[pos]||ROBOTP[0],x0=P[0],y0=P[1],z0=P[2],ry=P[3];
+  const V=spdMs(speed),pitch=lDeg(arc)*Math.PI/180,yw=(yaw+ry)*Math.PI/180;
+  let vx=-Math.sin(yw)*Math.cos(pitch)*V,vy=Math.cos(yw)*Math.cos(pitch)*V,vz=Math.sin(pitch)*V;
+  const w=spRps(rot)*2*Math.PI*spinSign(spin),wx=Math.cos(yw)*w,wy=Math.sin(yw)*w;
+  const G=TRAJ.G,DRAG=TRAJ.DRAG,MAG=TRAJ.MAG,GROUND_Z=TRAJ.GROUND_Z,dt=0.001;
+  const OFX=0.04352,OFZ=0.08994,cy=Math.cos(yw),sy=Math.sin(yw);
+  let x=x0-cy*OFX-sy*OFZ,y=y0+cy*OFZ-sy*OFX,z=z0+TRAJ.LAUNCH_OFF_Z,netZ=0,land=null;
+  for(let i=0;i<6000&&!land;i++){
+    const v=Math.hypot(vx,vy,vz),dr=v*DRAG;
+    const nvy=vy+((0-vy*dr)-wx*MAG*vz)*dt;
+    const nvz=vz+(((wx*MAG*vy-wy*MAG*vx)-vz*dr)+G)*dt;
+    const nvx=vx+(wy*MAG*vz+(-vx*v*DRAG))*dt;
+    const nx=x+vx*dt,ny=y+vy*dt,nz=z+vz*dt;
+    if(netZ===0&&y<0&&ny>=0)netZ=nz;
+    if(nvz<0&&nz<GROUND_Z)land={x:nx,y:ny};
+    x=nx;y=ny;z=nz;vx=nvx;vy=nvy;vz=nvz;
   }
-  groups = [...byKey.values()];
-  groups.forEach(g => { g.positions = Object.keys(g.versions).map(Number).sort(); });
+  const feed=y0>0;
+  const out=feed||!land?null:land.y<0?"filet":Math.abs(land.x)>TRAJ.X_MAX?"large":null;
+  const lowNet=!feed&&!out&&netZ>0&&netZ<TRAJ.NET_H;
+  return{x:land?-land.x:0,depth:land?land.y:0,out,lowNet,robot:{x:-x0,y:y0}};
+}
+function simOne(b,pos){return simulate(b.speed,b.arc,b.rotationSpeed||0,b.spin||"flat",yawD(b.dropPoint||0),pos||0);}
+function courtSvg(balls,pos=0,w=300,h=210){
+  const pad=8,r=6,view={x:6.6,top:-2.2,bottom:14};
+  const scale=Math.min((w-2*pad)/(2*view.x),(h-2*pad)/(view.bottom-view.top));
+  const cx=w/2,oy=pad-view.top*scale;
+  const X=m=>cx+Math.max(-view.x,Math.min(view.x,m))*scale;
+  const Y=m=>oy+Math.max(view.top+0.3,Math.min(view.bottom-0.3,m))*scale;
+  let s=`<svg viewBox="0 0 ${w} ${h}">`;
+  s+=`<rect width="${w}" height="${h}" rx="8" fill="#2f6b8f"/>`;
+  s+=`<g stroke="rgba(255,255,255,.8)" stroke-width="1" fill="none">`
+   +`<rect x="${X(-COURTG.doubles)}" y="${Y(0)}" width="${2*COURTG.doubles*scale}" height="${COURTG.half*scale}"/>`
+   +`<line x1="${X(-COURTG.singles)}" y1="${Y(0)}" x2="${X(-COURTG.singles)}" y2="${Y(COURTG.half)}"/>`
+   +`<line x1="${X(COURTG.singles)}" y1="${Y(0)}" x2="${X(COURTG.singles)}" y2="${Y(COURTG.half)}"/>`
+   +`<line x1="${X(-COURTG.singles)}" y1="${Y(COURTG.service)}" x2="${X(COURTG.singles)}" y2="${Y(COURTG.service)}"/>`
+   +`<line x1="${cx}" y1="${Y(0)}" x2="${cx}" y2="${Y(COURTG.service)}"/></g>`;
+  s+=`<line x1="${X(-COURTG.doubles)-5}" y1="${Y(0)}" x2="${X(COURTG.doubles)+5}" y2="${Y(0)}" stroke="#fff" stroke-width="2"/>`;
+  const sims=balls.map(b=>({b,...simOne(b,pos)}));
+  const robot=sims.length?sims[0].robot:{x:0,y:-12};
+  const rx=X(robot.x),my=robot.y<view.top?pad+2:Y(robot.y);
+  s+=`<rect x="${rx-9}" y="${my-2}" width="18" height="6" rx="3" fill="#fff" opacity=".9"/>`;
+  const pts=[];
+  for(const p of sims){let bx=X(p.x),by=Y(p.depth),px=bx,py=by;
+    const free=(a,b2)=>!pts.some(q=>Math.hypot(q.px-a,q.py-b2)<r*1.9);
+    for(let k=1;k<80&&!free(px,py);k++){const ring=Math.ceil(k/8),an=(k%8)*Math.PI/4;px=bx+Math.cos(an)*ring*r*1.9;py=by+Math.sin(an)*ring*r*1.9;}
+    pts.push({px,py,p});}
+  for(const q of pts) s+=`<line x1="${rx}" y1="${my+4}" x2="${q.px}" y2="${q.py}" stroke="${spinCol(q.p.b.spin)}" stroke-width="1" opacity=".3"/>`;
+  pts.forEach((q,i)=>{const c=spinCol(q.p.b.spin);
+    const fa=q.p.out?` stroke="#ff6b6b" stroke-dasharray="2 2"`:q.p.lowNet?` stroke="#ffb020" stroke-dasharray="2 2"`:` stroke="#fff"`;
+    s+=`<circle cx="${q.px}" cy="${q.py}" r="${r}" fill="${c}"${fa} stroke-width="1.5"/>`
+      +`<text x="${q.px}" y="${q.py+3}" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">${i+1}</text>`;});
+  return s+`</svg>`;
+}
+function renderCourt(d,label){
+  const C=$("court"),L=$("courtLabel");
+  if(!d||!d.balls){C.innerHTML="";L.textContent="—";return;}
+  L.textContent=label||d.name||"Drill";
+  try{C.innerHTML=courtSvg(d.balls,d.position||0);}catch(e){C.innerHTML="";}
 }
 
-// The drill shown for a group: its version at the chosen robot position, or its first version.
-function shownVersion(g, usePos = modeOf().positions) {
-  return usePos ? g.versions[state.pos] : g.versions[g.positions[0]];
-}
+/* ===== câblage UI ===== */
+function enableControls(){["btnNext","btnPause","btnStop","btnReload"].forEach(id=>$(id).disabled=false);
+  if(ENGINE.session)setState("waiting");}
+$("btnConnect").onclick=()=>BLE.connect().catch(e=>log("connexion: "+e,"err"));
+$("btnLoad").onclick=()=>ENGINE.load($("drills").value);
+$("btnNext").onclick=()=>ENGINE.next();
+$("btnPause").onclick=()=>ENGINE.pause();
+$("btnStop").onclick=()=>ENGINE.stop();
+$("btnReload").onclick=()=>HUB.url?pullDrills():ENGINE.load($("drills").value);
+$("btnHub").onclick=()=>{const u=$("hubUrl").value.trim(),t=$("hubTok").value.trim();
+  try{localStorage.setItem("cc_hubUrl",u);localStorage.setItem("cc_hubTok",t);}catch(e){}
+  HUB.start(u,t);};
 
-function entries(skip) {
-  const mode = modeOf(), q = state.q.trim().toLowerCase();
-  return groups
-    .filter(g => mode.sections.includes(g.section) && (skip === "section" || state.section === "all" || g.section === state.section))
-    .map(g => ({ g, d: shownVersion(g, mode.positions && skip !== "pos") || shownVersion(g, false), official: !!g.versions[state.pos] }))
-    .filter(({ g, d }) =>
-      (skip === "pos" || !mode.positions || g.versions[state.pos]) &&
-      (skip === "theme" || state.theme === "all" || d.themes.includes(state.theme)) &&
-      (skip === "grade" || state.grade === "all" || d.grades.includes(state.grade)) &&
-      (skip === "stroke" || state.stroke === "all" || d.strokes.includes(state.stroke)) &&
-      (!q || q.split(/\s+/).every(t => d.haystack.includes(t))));
-}
-
-// Chip counts reflect every other active filter, so a click never leads to an empty list unexpectedly.
-function chipEntries(key, allLabel, labels) {
-  const list = entries(key);
-  const counts = new Map(labels.map(l => [l, 0]));
-  for (const { d } of list) for (const l of d[key + "s"]) counts.set(l, (counts.get(l) || 0) + 1);
-  return [["all", allLabel, list.length], ...[...counts].filter(([, n]) => n).map(([l, n]) => [l, l, n])];
-}
-
-function positionPicker(counts) {
-  // Small full court, robot side at the top, the six positions clickable like in the app.
-  const w = 92, h = 168, pad = 6, sc = (h - 2 * pad) / 27.4, cx = w / 2, oy = pad + 13.4 * sc;
-  const X = m => cx + m * sc, Y = m => oy + m * sc;
-  let s = `<svg viewBox="0 0 ${w} ${h}" role="img" aria-label="Choisir la position du robot"><rect width="${w}" height="${h}" rx="8" fill="var(--court)"/>`;
-  s += `<rect x="${X(-5.485)}" y="${Y(-11.885)}" width="${10.97 * sc}" height="${23.77 * sc}" fill="none" stroke="var(--court-line)"/>`;
-  s += `<line x1="${X(-6)}" y1="${Y(0)}" x2="${X(6)}" y2="${Y(0)}" stroke="#fff" stroke-width="2"/>`;
-  Object.values(ROBOT_POSITIONS).forEach(([px, py], k) => {
-    const on = k === state.pos, n = counts[k] || 0;
-    s += `<g data-pos="${k}" opacity="${n ? 1 : .35}"><circle cx="${X(-px)}" cy="${Y(py)}" r="7.5" fill="${on ? "#fff" : "rgba(255,255,255,.15)"}" stroke="#fff"/>
-      <text x="${X(-px)}" y="${Y(py) + 3}" text-anchor="middle" font-size="9" font-weight="700" fill="${on ? "var(--court)" : "#fff"}" pointer-events="none">${k + 1}</text></g>`;
-  });
-  return s + `</svg>`;
-}
-
-function renderFilters() {
-  const mode = modeOf();
-  const modeCount = m => groups.filter(g => m.sections.includes(g.section)).length;
-  document.getElementById("modes").innerHTML = MODES.filter(modeCount).map(m =>
-    `<button class="mode" data-v="${m.id}" aria-pressed="${m.id === state.mode}">${m.label} · ${modeCount(m)}<small>${m.hint}</small></button>`).join("");
-
-  const subs = mode.sections.filter(k => drills.some(d => d.section === k));
-  document.getElementById("sub-row").hidden = subs.length < 2;
-  const bySection = countBy(entries("section").map(e => e.g), "section");
-  renderChips(document.getElementById("sections"),
-    [["all", "Tout", entries("section").length], ...subs.map(k => [k, SECTION_LABELS[k], bySection.get(k) || 0])],
-    state.section, v => { state.section = v; state.shown = PAGE; render(); });
-
-  document.getElementById("pos-row").hidden = !mode.positions;
-  if (mode.positions) {
-    const counts = {};
-    for (const { g } of entries("pos")) for (const k of g.positions) counts[k] = (counts[k] || 0) + 1;
-    document.getElementById("pos-court").innerHTML = positionPicker(counts);
-    renderChips(document.getElementById("positions"), POSITION_LABELS.map((l, k) => [String(k), l, counts[k] || 0, counts[k] ? "" : "unofficial"]),
-      String(state.pos), v => { state.pos = Number(v); state.shown = PAGE; render(); });
-  }
-
-  renderChips(document.getElementById("themes"), chipEntries("theme", "Tous les thèmes", THEMES.map(([l]) => l)),
-    state.theme, v => { state.theme = v; state.shown = PAGE; render(); });
-  renderChips(document.getElementById("grades"), chipEntries("grade", "Toutes difficultés", [...GRADES.map(([, l]) => l), "Non évalué"]),
-    state.grade, v => { state.grade = v; state.shown = PAGE; render(); });
-  renderChips(document.getElementById("strokes"), chipEntries("stroke", "Tous les coups", [...STROKES.map(([l]) => l), "Non précisé"]),
-    state.stroke, v => { state.stroke = v; state.shown = PAGE; render(); });
-}
-
-// Trajectory model ported from pongbot_trajectory.py (constants and geometry reversed from libPaceRobot.so).
-// Model frame: net at y=0, player's half y>0, robot placed per devicePosition (P_robot_cfg).
-const TRAJ = { G: -9.802, DRAG: 0.0164, MAG: 0.00035, NET_H: 0.949, GROUND_Z: 0.0326, X_MAX: 5.52, Y_MAX: 11.92, LAUNCH_OFF_Z: 0.19265 };
-const ROBOT_POSITIONS = {  // x, y, z, yaw° for devicePosition 0–5
-  0: [0, -12.107, 0, 0], 1: [-4.115, -12.107, 0, -8], 2: [4.115, -12.107, 0, 8],
-  3: [0, -6.622, 0, 0], 4: [-4.115, 6.178, 0, -8], 5: [4.115, 6.178, 0, 8],
-};
-const COURT = { half: 11.885, singles: 4.115, doubles: 5.485, service: 6.40 };
-const speedMs = speed => 7 + 2 * Number(speed);
-const launchDeg = arc => Number(arc) * 0.4 + 10;
-const yawDeg = drop => Number(drop) * 1.7;
-const spinRps = rot => Number(rot) * 6;
-const spinSign = spin => spin.startsWith("lift") ? -1 : spin.startsWith("coupé") ? 1 : 0;  // native sign: topspin −, backspin +
-
-function simulate(speed, arc, rot, spin, yaw, pos = 0) {
-  const [x0, y0, z0, robotYaw] = ROBOT_POSITIONS[pos] || ROBOT_POSITIONS[0];
-  const V = speedMs(speed), pitch = launchDeg(arc) * Math.PI / 180, yw = (yaw + robotYaw) * Math.PI / 180;
-  let vx = -Math.sin(yw) * Math.cos(pitch) * V, vy = Math.cos(yw) * Math.cos(pitch) * V, vz = Math.sin(pitch) * V;
-  const w = spinRps(rot) * 2 * Math.PI * spinSign(spin);
-  const wx = Math.cos(yw) * w, wy = Math.sin(yw) * w, wz = 0;
-  const { G, DRAG, MAG, GROUND_Z } = TRAJ, dt = 0.001;  // native step (DAT_0012d350)
-  // Launch point offset from the robot's pivot (getInitInfo), rotated by the yaw.
-  const OFX = 0.04352, OFZ = 0.08994, cy = Math.cos(yw), sy = Math.sin(yw);
-  let x = x0 - cy * OFX - sy * OFZ, y = y0 + cy * OFZ - sy * OFX, z = z0 + TRAJ.LAUNCH_OFF_Z, netZ = 0, land = null;
-  const path = [[y, z]];
-  for (let i = 0; i < 6000 && !land; i++) {
-    const v = Math.hypot(vx, vy, vz), dr = v * DRAG;
-    const nvy = vy + ((wz * MAG * vx - vy * dr) - wx * MAG * vz) * dt;
-    const nvz = vz + (((wx * MAG * vy - wy * MAG * vx) - vz * dr) + G) * dt;
-    const nvx = vx + (wy * MAG * vz + (-vx * v * DRAG - wz * MAG * vy)) * dt;
-    const nx = x + vx * dt, ny = y + vy * dt, nz = z + vz * dt;
-    if (netZ === 0 && y < 0 && ny >= 0) netZ = nz;  // raw height at the first step past the net, like calBallTrajectory
-    if (nvz < 0 && nz < GROUND_Z) land = { x: nx, y: ny };
-    x = nx; y = ny; z = nz; vx = nvx; vy = nvy; vz = nvz;
-    if (i % 40 === 0 || land) path.push([y, z]);
-  }
-  const feed = y0 > 0;  // positions 4/5: robot on the player's side, no net to clear (direction not validated yet)
-  // Only the net is a hard fault for a feeding machine: a ball past the baseline is a normal deep feed (ball-params.md).
-  const out = feed || !land ? null : land.y < 0 ? "filet" : Math.abs(land.x) > TRAJ.X_MAX ? "large" : null;
-  const deep = !!land && !out && !feed && land.y > TRAJ.Y_MAX;
-  // Crosses the net plane below the native net height: flagged, but official drills do this too, so not a fault.
-  const lowNet = !feed && !out && netZ > 0 && netZ < TRAJ.NET_H;
-  // Player's view: +x = player's right (drop > 0 is the right-hander's forehand side).
-  return {
-    x: land ? -land.x : 0, depth: land ? land.y : 0, out, feed, deep, lowNet, path,
-    netClear: feed ? null : netZ - TRAJ.NET_H,  // the app's "élévation"; −0.95 when the ball never reaches the net
-    robot: { x: -x0, y: y0, z: z0 + TRAJ.LAUNCH_OFF_Z },
-  };
-}
-
-// Results are cached per robot position: the detail view lets you move the robot like in the app.
-function simBall(b, pos = b.pos) {
-  b._sims ||= {};
-  if (!b._sims[pos]) {
-    const sim = simulate(b.speed, b.arc, b.rot, b.spin, yawDeg(b.drop), pos);
-    if (b.lrMin !== undefined) {
-      sim.spread = [b.lrMin, b.lrMax].map(a => simulate(b.speed, b.arc, b.rot, b.spin, a, pos).x);
-    }
-    b._sims[pos] = sim;
-  }
-  return b._sims[pos];
-}
-
-function placeBalls(balls, pos) {
-  return balls.map(b => ({ b, ...simBall(b, pos) }));
-}
-
-// Manual numbering 1–6 = devicePosition 0–5 (MACHINE.md).
-const POSITION_LABELS = ["1 · Fond centre", "2 · Fond droite", "3 · Fond gauche", "4 · T", "5 · Lancer droite", "6 · Lancer gauche"];
-
-function courtSvg(balls, sport, { w = 300, h = 300, mini = false, full = false, pos } = {}) {
-  const pad = mini ? 6 : 12, r = mini ? 4 : 9;
-  // Cards show the player's half; the detail shows the whole court so every robot position is visible.
-  const view = full ? { x: 6.6, top: -13.4, bottom: 14 } : { x: 6.6, top: -2.2, bottom: 14 };
-  const scale = Math.min((w - 2 * pad) / (2 * view.x), (h - 2 * pad) / (view.bottom - view.top));
-  const cx = w / 2, oy = pad - view.top * scale;
-  const X = m => cx + Math.max(-view.x, Math.min(view.x, m)) * scale;
-  const Y = m => oy + Math.max(view.top + 0.3, Math.min(view.bottom - 0.3, m)) * scale;
-
-  let s = `<svg class="mini" viewBox="0 0 ${w} ${h}" role="img" aria-label="Points de rebond calculés">`;
-  s += `<rect x="0" y="0" width="${w}" height="${h}" rx="8" fill="var(--court)"/>`;
-  s += `<g stroke="var(--court-line)" stroke-width="${mini ? 1 : 1.5}" fill="none">
-    ${(full ? [1, -1] : [1]).map(k => `
-    <rect x="${X(-COURT.doubles)}" y="${Math.min(Y(0), Y(k * COURT.half))}" width="${2 * COURT.doubles * scale}" height="${COURT.half * scale}"/>
-    <line x1="${X(-COURT.singles)}" y1="${Y(0)}" x2="${X(-COURT.singles)}" y2="${Y(k * COURT.half)}"/>
-    <line x1="${X(COURT.singles)}" y1="${Y(0)}" x2="${X(COURT.singles)}" y2="${Y(k * COURT.half)}"/>
-    <line x1="${X(-COURT.singles)}" y1="${Y(k * COURT.service)}" x2="${X(COURT.singles)}" y2="${Y(k * COURT.service)}"/>
-    <line x1="${cx}" y1="${Y(0)}" x2="${cx}" y2="${Y(k * COURT.service)}"/>`).join("")}
-  </g>`;
-  s += `<line x1="${X(-COURT.doubles) - 5}" y1="${Y(0)}" x2="${X(COURT.doubles) + 5}" y2="${Y(0)}" stroke="#fff" stroke-width="${mini ? 2 : 3}"/>`;
-  // Robot marker: behind the top edge when it stands on the far side, on court for positions 4/5.
-  const robot = balls.length ? simBall(balls[0], pos).robot : { x: 0, y: -12 };
-  const rx = X(robot.x), my = robot.y < view.top ? pad + 2 : Y(robot.y);
-  if (full) {
-    // The six positions of the app, the active one drawn solid.
-    Object.values(ROBOT_POSITIONS).forEach(([px, py], k) => {
-      s += `<g opacity=".45"><circle cx="${X(-px)}" cy="${Y(py)}" r="7" fill="none" stroke="#fff" stroke-dasharray="2 2"/>
-        <text x="${X(-px)}" y="${Y(py) + 3}" text-anchor="middle" font-size="8" fill="#fff">${k + 1}</text></g>`;
-    });
-  }
-  s += `<rect x="${rx - (mini ? 9 : 14)}" y="${my - 2}" width="${mini ? 18 : 28}" height="${mini ? 6 : 9}" rx="3" fill="#fff" opacity=".9"/>`;
-  const placed = [];
-  const spots = placeBalls(balls, pos).map((p, i) => {
-    const bx = X(p.x), by = Y(p.depth);
-    let px = bx, py = by;
-    // Nudge overlapping dots apart so every ball stays visible.
-    const free = (x, y) => !placed.some(q => Math.hypot(q.px - x, q.py - y) < r * 1.9);
-    for (let k = 1; k < 80 && !free(px, py); k++) {
-      const ring = Math.ceil(k / 8), a = (k % 8) * Math.PI / 4;
-      px = bx + Math.cos(a) * ring * r * 1.9;
-      py = by + Math.sin(a) * ring * r * 1.9;
-    }
-    const spot = { ...p, i, px, py };
-    placed.push(spot);
-    return spot;
-  });
-
-  for (const p of spots) {
-    const c = spinColor(p.b.spin);
-    if (p.spread) {
-      s += `<line x1="${X(p.spread[0])}" y1="${p.py}" x2="${X(p.spread[1])}" y2="${p.py}" stroke="${c}" stroke-width="${mini ? 3 : 5}" stroke-linecap="round" opacity=".35"/>`;
-    }
-    s += `<line x1="${rx}" y1="${my + 4}" x2="${p.px}" y2="${p.py}" stroke="${c}" stroke-width="1" opacity="${mini ? .35 : .3}"/>`;
-  }
-  for (const p of spots) {
-    const fault = p.out ? ` stroke-dasharray="2 2" stroke="#ff6b6b"` : p.lowNet ? ` stroke-dasharray="2 2" stroke="#ffb020"` : ` stroke="#fff"`;
-    s += `<circle cx="${p.px}" cy="${p.py}" r="${r}" fill="${spinColor(p.b.spin)}"${fault} stroke-width="${mini ? 1 : 2}"><title>${p.i + 1}. ${esc(p.b.tag)} · rebond ${p.depth.toFixed(1)} m du filet${p.out ? ` · faute (${p.out})` : ""}</title></circle>`;
-    if (!mini) s += `<text x="${p.px}" y="${p.py + 3.5}" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" pointer-events="none">${p.i + 1}</text>`;
-  }
-  return s + `</svg>`;
-}
-
-// Side view: height along the robot → baseline axis, with the net.
-function profileSvg(balls, { w = 300, h = 130, pos } = {}) {
-  const sims = balls.map(b => simBall(b, pos));
-  const pad = 12, y0 = ROBOT_POSITIONS[0][1], y1 = COURT.half + 2;
-  const zMax = Math.max(3, ...sims.flatMap(s => s.path.map(([, z]) => z))) * 1.08;
-  const X = y => pad + (y - y0) / (y1 - y0) * (w - 2 * pad);
-  const Z = z => h - pad - z / zMax * (h - 2 * pad - 4);
-  let s = `<svg class="mini" viewBox="0 0 ${w} ${h}" role="img" aria-label="Trajectoires vues de profil">`;
-  s += `<rect x="0" y="0" width="${w}" height="${h}" rx="8" fill="var(--court)"/>`;
-  s += `<line x1="${X(y0)}" y1="${Z(0)}" x2="${X(y1)}" y2="${Z(0)}" stroke="var(--court-line)" stroke-width="1.5"/>`;
-  for (const y of [-COURT.service, COURT.service, COURT.half]) s += `<line x1="${X(y)}" y1="${Z(0)}" x2="${X(y)}" y2="${Z(0) + 4}" stroke="var(--court-line)"/>`;
-  s += `<line x1="${X(0)}" y1="${Z(0)}" x2="${X(0)}" y2="${Z(TRAJ.NET_H)}" stroke="#fff" stroke-width="3"/>`;
-  const robot = sims.length ? sims[0].robot : { y: y0, z: TRAJ.LAUNCH_OFF_Z };
-  s += `<rect x="${X(robot.y) - 3}" y="${Z(robot.z) - 3}" width="8" height="6" rx="2" fill="#fff" opacity=".9"/>`;
-  sims.forEach((sim, i) => {
-    const c = spinColor(balls[i].spin);
-    const pts = sim.path.filter(([y]) => y <= y1).map(([y, z]) => `${X(y).toFixed(1)},${Z(Math.max(0, z)).toFixed(1)}`).join(" ");
-    s += `<polyline points="${pts}" fill="none" stroke="${c}" stroke-width="1.6" opacity=".85"${sim.out ? ' stroke-dasharray="4 3"' : ""}/>`;
-  });
-  s += `<text x="${w - pad}" y="${pad + 4}" text-anchor="end" font-size="9.5" fill="#fff" opacity=".85">hauteur max ${(zMax / 1.08).toFixed(1)} m</text>`;
-  return s + `</svg>`;
-}
-
-// Own difficulty estimate, mixing physical load and ball complexity (each 0–1).
-// Physical: lateral spread, depth changes, tempo, number of balls. Balls: speed, spin and type variety, rotation, randomness.
-const GRADES = [[0.12, "Facile"], [0.25, "Moyen"], [0.45, "Difficile"], [Infinity, "Très difficile"]];
-const clamp01 = x => Math.max(0, Math.min(1, x));
-
-function rateDrill(d) {
-  const balls = (d.variants[0] || { balls: [] }).balls;
-  if (!balls.length) return null;
-  const spots = placeBalls(balls);
-  const xs = spots.length ? spots.flatMap(p => p.spread || [p.x]) : [0], depths = spots.length ? spots.map(p => p.depth) : [0];
-  const lateral = clamp01((Math.max(...xs) - Math.min(...xs)) / (2 * COURT.singles));
-  const depth = clamp01((Math.max(...depths) - Math.min(...depths)) / 8);
-  const intervals = balls.map(b => Number(b.interval)).filter(x => x > 0);
-  const avgInterval = intervals.length ? intervals.reduce((a, b) => a + b) / intervals.length : 3;  // sensor-triggered: ~continuous rally
-  const tempo = clamp01((6 - avgInterval) / 3.5);
-  const volume = clamp01((balls.reduce((t, b) => t + Number(b.repeat || 1), 0) - 1) / 6);
-  const physical = 0.35 * lateral + 0.25 * depth + 0.25 * tempo + 0.15 * volume;
-
-  const avg = key => balls.reduce((t, b) => t + Number(b[key]), 0) / balls.length;
-  const speed = clamp01((avg("speed") - 3.5) / 4.5);
-  const spinVariety = clamp01((new Set(balls.map(b => b.spin)).size - 1) / 2);
-  const typeVariety = clamp01((new Set(balls.map(b => b.tag)).size - 1) / 4);
-  const rotation = clamp01(avg("rot") / 5);
-  const random = balls.some(b => b.lrMin !== undefined) ? 1 : 0;
-  const complexity = 0.35 * speed + 0.2 * spinVariety + 0.25 * typeVariety + 0.1 * rotation + 0.1 * random;
-
-  let score = 0.55 * physical + 0.45 * complexity;
-  if (d.level) score = 0.5 * score + 0.5 * Number(d.level) / 10;  // Smart match: the app's own level 1–10
-  const grade = GRADES.findIndex(([max]) => score < max);
-  return { physical, complexity, score, grade: grade + 1, label: GRADES[grade][1] };
-}
-
-function defaultVariant(d) {
-  return d.variants[0] || { balls: [] };
-}
-
-let visible = [];
-function render() {
-  renderFilters();
-  visible = entries();
-  const grid = document.getElementById("grid");
-  grid.innerHTML = visible.slice(0, state.shown).map(({ g, d }, i) => {
-    const v = defaultVariant(d);
-    const tags = d.tags.slice(0, 5).map(t => `<span class="tag">${esc(t)}</span>`).join("");
-    const where = g.positions.length > 1 ? `<span>· positions ${g.positions.map(k => k + 1).join(", ")}</span>` : "";
-    return `<button class="card" data-i="${i}">
-      ${courtSvg(v.balls, d.sport, { w: 240, h: 130, mini: true })}
-      <h3>${esc(d.name)}</h3>
-      <div class="meta">
-        ${d.rating ? `<span class="badge grade grade-${d.rating.grade}">${d.rating.label}</span>` : ""}
-        ${d.suspect ? `<span class="badge warn" title="${SUSPECT_NOTE}">⚠ Données douteuses</span>` : ""}
-        <span class="badge">${esc(SECTION_LABELS[d.section] || d.section)}</span>
-        <span>${v.balls.length} balle${v.balls.length > 1 ? "s" : ""}</span>
-        ${where}
-      </div>
-      <div class="tags">${tags}</div>
-    </button>`;
-  }).join("");
-  document.getElementById("count").textContent = `${visible.length} exercice${visible.length > 1 ? "s" : ""}`;
-  document.getElementById("empty").hidden = visible.length > 0;
-  document.getElementById("more").hidden = visible.length <= state.shown;
-}
-
-let current = null;
-function openGroup(g, d) {
-  current = { g, base: d, idx: 0, pos: posOf(d) };
-  renderDetail();
-  document.getElementById("dlg").showModal();
-}
-
-function openDrill(d) {
-  openGroup(groups.find(g => g.versions[posOf(d)] === d), d);
-}
-
-function seg(name, options, value) {
-  if (options.length < 2) return "";
-  return `<div><div class="label">${name}</div><div class="seg" data-seg="${name}">${options.map(([v, l]) =>
-    `<button data-v="${v}" aria-pressed="${v === value}">${l}</button>`).join("")}</div></div>`;
-}
-
-function renderDetail() {
-  const { g } = current;
-  // Official version for the chosen position when it exists, otherwise the opened one moved there.
-  const official = g.versions[current.pos];
-  const d = official || current.base;
-  const idx = current.idx ?? 0;
-  const v = d.variants[idx] || { balls: [] };
-
-  document.getElementById("d-title").textContent = d.name;
-  document.getElementById("d-meta").innerHTML = [
-    d.rating && `<span class="badge grade grade-${d.rating.grade}">${d.rating.label}</span>`,
-    d.suspect && `<span class="badge warn">⚠ Données douteuses</span>`,
-    `<span class="badge">${esc(SECTION_LABELS[d.section] || d.section)}</span>`,
-    d.id != null && `<span>id ${d.id}</span>`,
-    d.code && `<span>· code ${esc(d.code)}</span>`,
-  ].filter(Boolean).join("");
-
-  const ctrl = document.getElementById("d-controls");
-  ctrl.innerHTML = (d.variants.length > 1
-    ? seg("Variante", d.variants.map((_, i) => [String(i), String(i + 1)]), String(idx))
-    : "") + seg("Position du robot", POSITION_LABELS.map((l, k) => [String(k), g.versions[k] ? `${l} ★` : `${l} (simulé)`]), String(current.pos))
-    + `<p class="version-note">${official
-      ? `★ Version officielle pour la position ${current.pos + 1}.`
-      : `Pas de version officielle en position ${current.pos + 1} : réglages de la position ${posOf(d) + 1} lancés depuis la position ${current.pos + 1} (simulation).`}</p>`;
-  ctrl.onclick = e => {
-    const b = e.target.closest("button[data-v]");
-    if (!b) return;
-    const kind = b.parentElement.dataset.seg;
-    if (kind === "Variante") current.idx = Number(b.dataset.v);
-    if (kind === "Position du robot") { current.pos = Number(b.dataset.v); current.idx = 0; }
-    renderDetail();
-  };
-
-  const meter = (label, x) => `<div class="meter"><span>${label}</span><div class="bar"><i style="width:${Math.round(x * 100)}%"></i></div><span>${Math.round(x * 10)}/10</span></div>`;
-  const warnEl = document.getElementById("d-warn");
-  warnEl.hidden = !d.suspect;
-  warnEl.textContent = d.suspect ? SUSPECT_NOTE : "";
-  document.getElementById("d-rating").innerHTML = d.rating
-    ? `<h4>Difficulté estimée : ${d.rating.label}</h4>${meter("Physique", d.rating.physical)}${meter("Balles", d.rating.complexity)}`
-    : "";
-  const pos = current.pos;
-  document.getElementById("d-court").innerHTML = courtSvg(v.balls, d.sport, { w: 300, h: 560, full: true, pos });
-  document.getElementById("d-profile").innerHTML = profileSvg(v.balls, { pos });
-  // Adaptive Rally pools: balls are picked by weight when the sensor sees you, so no interval/repeat.
-  const pool = v.balls.some(b => b.prob !== undefined);
-  const unit = text => `<span style="color:var(--muted)">${text}</span>`;
-  document.getElementById("d-table").innerHTML =
-    `<thead><tr><th>#</th><th>Type</th><th>Vitesse</th><th>Rotation</th><th>Arc</th><th>Direction</th><th>Rebond</th><th>Au-dessus du filet</th>${pool ? "<th>Prob.</th>" : "<th>Intervalle</th><th>Répét.</th>"}</tr></thead><tbody>` +
-    v.balls.map((b, i) => `<tr>
-      <td><span class="dot" style="background:${spinColor(b.spin)}">${i + 1}</span></td>
-      <td>${esc(b.tag || "—")} <span style="color:var(--muted)">· ${esc(b.spin)}</span></td>
-      <td>${b.speed} ${unit(Math.round(speedMs(b.speed) * 3.6) + " km/h")}</td>
-      <td>${b.rot} ${unit(spinRps(b.rot) + " tr/s")}</td>
-      <td>${b.arc} ${unit(launchDeg(b.arc).toFixed(0) + "°")}</td>
-      <td>${b.lrMin !== undefined ? `aléatoire ${b.lrMin}°/${b.lrMax}°` : `${b.drop} ${unit(yawDeg(b.drop).toFixed(0) + "°")}`}</td>
-      <td>${simBall(b, pos).feed ? `${simBall(b, pos).depth.toFixed(1)} m ${unit("lancer côté joueur, sens non validé")}` : simBall(b, pos).out ? `<span style="color:#d64545">faute (${simBall(b, pos).out})</span>` : `${simBall(b, pos).depth.toFixed(1)} m${simBall(b, pos).deep ? ` ${unit("derrière la ligne de fond")}` : ""}`}</td>
-      <td>${simBall(b, pos).netClear === null ? "—" : simBall(b, pos).lowNet ? `<span style="color:#c77700">${simBall(b, pos).netClear.toFixed(2)} m · touche le filet ?</span>` : `${simBall(b, pos).netClear.toFixed(2)} m`}</td>${pool ? `<td>${b.prob}</td>` : `<td>${b.interval} s</td><td>${b.repeat}</td>`}
-    </tr>`).join("") + `</tbody>`;
-
-  const totalTime = v.balls.reduce((t, b) => t + Number(b.interval || 0) * Number(b.repeat || 1), 0);
-  const kv = [
-    ["Balles", v.balls.length],
-    ["Durée d'un cycle", totalTime ? `${totalTime.toFixed(1)} s` : null],
-    ["Vitesse moy.", v.balls.length ? (v.balls.reduce((t, b) => t + Number(b.speed), 0) / v.balls.length).toFixed(1) : null],
-    ["Description", d.desc],
-    ["Mode appareil", d.mode],
-    ["Position du robot", d.position != null ? POSITION_LABELS[posOf(d)] : null],
-    ["Niveau", d.level],
-    ["Capacité de renvoi", d.returnAbility],
-    ["Capacité de course", d.runningAbility],
-    ["Objectif (points)", d.winIndex],
-    ["Ratio gauche/droite", d.leftRightRate],
-    ["Sensibilité frappe", d.sensitivity],
-  ].filter(([, val]) => val !== null && val !== undefined && val !== "");
-  document.getElementById("d-kv").innerHTML = kv.map(([k, val]) => `<dt>${esc(k)}</dt><dd>${esc(val)}</dd>`).join("");
-
-  document.getElementById("d-zones").innerHTML = v.zones?.length ? `<h4>Zones de position joueur (capteur)</h4>
-    <div class="table-wrap"><table><thead><tr><th>X</th><th>Y</th><th>Portée</th><th>Zone précise</th><th>Décalage</th><th>Délai</th></tr></thead><tbody>
-    ${v.zones.map(z => `<tr><td>${z.x}</td><td>${z.y}</td><td>${z.range}</td><td>${z.precise}</td><td>${z.offset}</td><td>${z.delay} s</td></tr>`).join("")}
-    </tbody></table></div>` : "";
-}
-
-document.getElementById("summary").textContent =
-  `${drills.length} exercices · machine série 203`;
-document.getElementById("q").addEventListener("input", e => { state.q = e.target.value; state.shown = PAGE; render(); });
-document.getElementById("more").onclick = () => { state.shown += PAGE; render(); };
-document.getElementById("grid").onclick = e => {
-  const c = e.target.closest(".card");
-  if (c) { const { g, d } = visible[Number(c.dataset.i)]; openGroup(g, d); }
-};
-document.getElementById("modes").onclick = e => {
-  const b = e.target.closest("button");
-  if (b) { state.mode = b.dataset.v; state.section = "all"; state.shown = PAGE; render(); }
-};
-document.getElementById("pos-court").onclick = e => {
-  const g = e.target.closest("[data-pos]");
-  if (g) { state.pos = Number(g.dataset.pos); state.shown = PAGE; render(); }
-};
-document.getElementById("d-close").onclick = () => document.getElementById("dlg").close();
-document.getElementById("dlg").addEventListener("click", e => { if (e.target.id === "dlg") e.target.close(); });
-for (const d of drills) {
-  d.rating = rateDrill(d);
-  d.grades = [d.rating ? d.rating.label : "Non évalué"];
-  // Balls that cannot clear the net from the robot's position: placeholder/test values on the server.
-  d.suspect = (d.variants[0]?.balls || []).some(b => simBall(b).out === "filet");
-}
-buildGroups();
-render();
+/* drills d'exemple */
+$("drills").value=JSON.stringify({name:"Séance demo",drills:[
+ {name:"Warm-up CD croisé",repeat:1,pause_after_s:15,balls:[
+   {speed:5,arc:30,spin:"topspin",rotationSpeed:2,dropPoint:5,interval_s:3,tag:"forehand"},
+   {speed:5,arc:30,spin:"topspin",rotationSpeed:2,dropPoint:5,interval_s:3,tag:"forehand"}]},
+ {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
+   {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
+]},null,2);
+log("Prêt. Connecte le robot, charge des drills, puis ▶︎ Next. (dry-run par défaut.)");
+/* restaure le hub mémorisé (URL saisie une seule fois) */
+try{const u=localStorage.getItem("cc_hubUrl");if(u){$("hubUrl").value=u;
+  $("hubTok").value=localStorage.getItem("cc_hubTok")||"";HUB.start(u,$("hubTok").value);
+  log("Hub restauré automatiquement.","ok");}}catch(e){}
 </script>
 </body>
 </html>
