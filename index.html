@@ -37,10 +37,11 @@
   #court svg { width:100%; max-width:300px; height:auto; display:block; margin:2px auto; }
   .legend { font-size:11px; color:var(--mut); display:flex; gap:12px; justify-content:center; margin-top:4px; }
   .legend i { width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:4px; vertical-align:-1px; }
+  .ver { font-size:11px; color:var(--mut); font-weight:400; margin-left:6px; }
 </style>
 </head>
 <body>
-<h1>🎾 Court Coach <span id="state" class="pill s-off">déconnecté</span></h1>
+<h1>🎾 Court Coach <span id="state" class="pill s-off">déconnecté</span><span id="ver" class="ver"></span></h1>
 
 <div class="card">
   <div class="big-status" id="drillName">—</div>
@@ -169,21 +170,28 @@ function setState(s){const map={idle:["s-idle","idle"],playing:["s-playing","en 
   if(HUB.url)HUB.put("status",{state:s,drill:ENGINE.i,name:ENGINE.cur?.name||null});}
 
 /* ===== BLE ===== */
+function setDev(t){try{$("dev").textContent=t;}catch(e){}}
 const BLE={dev:null,wr:null,verified:false,rxbuf:[],
  async connect(){
-   if(!navigator.bluetooth){log("Web Bluetooth indisponible (utilise Bluefy sur iOS, Chrome ailleurs, en HTTPS).","err");return;}
-   log("Scan PACE…");
-   this.dev=await navigator.bluetooth.requestDevice({filters:[{namePrefix:"PACE"}],optionalServices:[SERVICE]});
-   this.dev.addEventListener("gattserverdisconnected",()=>{setState("off");log("Robot déconnecté.","warn");});
-   const g=await this.dev.gatt.connect();const s=await g.getPrimaryService(SERVICE);
-   this.wr=await s.getCharacteristic(CH_WRITE);const n=await s.getCharacteristic(CH_NOTIFY);
-   await n.startNotifications();n.addEventListener("characteristicvaluechanged",e=>this.onNotify(new Uint8Array(e.target.value.buffer)));
-   $("dev").textContent="Connecté : "+(this.dev.name||this.dev.id);log("Connecté + notify abonné.","ok");
-   await this.send(0x07); // handshake challenge
-   keepAwake();
+   if(!navigator.bluetooth){log("Web Bluetooth indisponible (Bluefy sur iOS, Chrome ailleurs, en HTTPS).","err");setDev("🔴 Web Bluetooth indisponible");return;}
+   setDev("🟡 Connexion…");log("Scan PACE…");
+   try{ this.dev=await navigator.bluetooth.requestDevice({filters:[{namePrefix:"PACE"}],optionalServices:[SERVICE]}); }
+   catch(e){ setDev("🔴 Non connecté");log("Connexion annulée / aucun robot trouvé : "+e,"warn");return; }
+   this.dev.addEventListener("gattserverdisconnected",()=>this.onDisconnect());
+   try{
+     const g=await this.dev.gatt.connect();const s=await g.getPrimaryService(SERVICE);
+     this.wr=await s.getCharacteristic(CH_WRITE);const n=await s.getCharacteristic(CH_NOTIFY);
+     await n.startNotifications();n.addEventListener("characteristicvaluechanged",e=>this.onNotify(new Uint8Array(e.target.value.buffer)));
+   }catch(e){ setDev("🔴 Échec de connexion");log("Échec GATT : "+e+" — rapproche-toi / remets le robot en appairage.","err");return; }
+   setDev("🟢 Connecté : "+(this.dev.name||this.dev.id));log("Connecté + notify abonné.","ok");
+   await this.send(0x07); keepAwake();   // handshake challenge
  },
- async send(op,data=[]){const f=buildFrame(op,data);for(let k=0;k<f.length;k+=252)
-   await this.wr.writeValueWithResponse(f.slice(k,k+252));},
+ onDisconnect(){ this.verified=false; setDev("⚠️ Déconnecté — tape « Connecter le robot »");
+   if(ENGINE.state==="playing"){ ENGINE.pause(); log("⚠️ Robot déconnecté PENDANT le drill — reconnecte puis ▶︎ Next.","err"); }
+   else log("Robot déconnecté.","warn"); },
+ async send(op,data=[]){ try{ const f=buildFrame(op,data);
+     for(let k=0;k<f.length;k+=252) await this.wr.writeValueWithResponse(f.slice(k,k+252));
+   }catch(e){ this.verified=false; setDev("⚠️ Écriture BLE échouée — reconnecte"); throw e; } },
  onNotify(bytes){this.rxbuf.push(...bytes);
    // extraction trame RX (45 54)
    while(true){const j=this.rxbuf.findIndex((b,k)=>b===0x45&&this.rxbuf[k+1]===0x54);
@@ -236,9 +244,11 @@ const sleep=ms=>new Promise(r=>{ENGINE.timer=setTimeout(r,ms);});
 async function fireBall(ball){
   const p=`speed=${ball.speed} arc=${ball.arc} spin=${ball.spin} rot=${ball.rotationSpeed} drop=${ball.dropPoint}`;
   if($("dry").checked||!BLE.verified){log("DRY fireBall("+p+")");return;}
-  // TODO: encoder les 24 octets + opcode (0x80/0x81 ou 0x46) une fois la capture faite,
-  //       puis: await BLE.send(OPCODE, bytes);
-  log("fireBall("+p+") — format réel non branché (fais une capture).","warn");
+  try{
+    // TODO: encoder les 24 octets + opcode (0x80/0x81 ou 0x46) une fois la capture faite,
+    //       puis: await BLE.send(OPCODE, bytes);
+    log("fireBall("+p+") — format réel non branché (fais une capture).","warn");
+  }catch(e){ log("⚠️ Tir échoué (BLE) : "+e+" — séance en pause.","err"); ENGINE.pause(); }
 }
 
 /* ===== Hub (Firebase RTDB en REST, poll 1s) ===== */
@@ -377,7 +387,9 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-log("Prêt. Connecte le robot, charge des drills, puis ▶︎ Next. (dry-run par défaut.)");
+const APP_VERSION="v1.0 · 2026-10-28";   // bump à chaque modif
+$("ver").textContent=APP_VERSION;
+log("Court Coach "+APP_VERSION+" — prêt. Connecte le robot, charge des drills, puis ▶︎ Next.");
 /* restaure le hub mémorisé (URL saisie une seule fois) */
 try{const u=localStorage.getItem("cc_hubUrl");if(u){$("hubUrl").value=u;
   $("hubTok").value=localStorage.getItem("cc_hubTok")||"";HUB.start(u,$("hubTok").value);
