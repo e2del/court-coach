@@ -67,6 +67,27 @@
   </div>
 </div>
 
+<details class="card">
+  <summary>⚙️ Réglages de séance</summary>
+  <label>Mode de lancement</label>
+  <select id="sMode"><option value="combo">Combo — nombre de sets</option><option value="time">Time — durée (minutes)</option></select>
+  <div class="row">
+    <div style="flex:1"><label>Sets</label><input id="sSets" type="number" value="1" min="1" max="20"></div>
+    <div style="flex:1"><label>Minutes (mode Time)</label><input id="sMin" type="number" value="10" min="1" max="120"></div>
+  </div>
+  <label style="margin-top:8px">Séquence des balles</label>
+  <select id="sSeq"><option value="sequential">Séquentiel</option><option value="random">Aléatoire</option></select>
+  <div class="row">
+    <div style="flex:1"><label>Pause entre sets (s)</label><input id="sCombo" type="number" value="0" min="0" max="60" step="0.5"></div>
+    <div style="flex:1"><label>Countdown avant tir (s)</label><input id="sCd" type="number" value="3" min="0" max="20"></div>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button id="btnSkip" class="cfg" disabled>⏭ Skip (tirer maintenant)</button>
+    <button id="btnStopBot" class="cfg" disabled>⏹ Stop robot</button>
+  </div>
+  <p class="mut" style="font-size:11px">Countdown = octet 0x08 du tir (0 = immédiat). Séquence / sets / pause sont gérés par l'app (tir balle par balle). Skip = 0x80·04, Stop robot = 0x80·01. Les « sets » remplacent le <code>repeat</code> du drill.</p>
+</details>
+
 <div class="card">
   <div class="mut" id="courtLabel">Aperçu du drill</div>
   <select id="ballSel" class="adv" style="margin-top:6px"></select>
@@ -409,17 +430,26 @@ const ENGINE={session:null,i:-1,bi:0,cur:null,state:"off",timer:null,paused:fals
  async playDrill(d){const run=++this._run;setState("playing");this.paused=false;
    $("drillName").textContent=d.name||("Drill "+(this.i+1));
    renderCourt(d,d.name||("Drill "+(this.i+1)));
-   const reps=d.repeat||1,seq=[];
-   for(let r=0;r<reps;r++)for(let b=0;b<d.balls.length;b++)seq.push({ball:d.balls[b],b,r});
-   for(;this.bi<seq.length;this.bi++){
-     await this._gate(); if(this._run!==run)return;
-     const it=seq[this.bi];
-     $("ballInfo").textContent=`balle ${it.b+1}/${d.balls.length}`+(reps>1?` (rep ${it.r+1}/${reps})`:"");
-     await fireBall(it.ball); if(this._run!==run)return;
-     if(BLE.verified) await BOT.waitReady(10000);
-     if($("calib").checked){ await this.awaitVerdict(it.ball); await sleep(300); }
-     else await sleep((it.ball.interval_s??3)*1000);
-     if(this._run!==run)return;
+   const timeMode=SESS.mode==="time";
+   const sets=timeMode?Infinity:Math.max(1,SESS.sets);
+   const endAt=timeMode?Date.now()+SESS.minutes*60000:Infinity;
+   const ci=SESS.comboInterval, rnd=SESS.sequence==="random", N=d.balls.length;
+   log("▶︎ "+(timeMode?("Time "+SESS.minutes+" min"):("Combo "+sets+" set(s)"))+
+       " · "+(rnd?"aléatoire":"séquentiel")+" · countdown "+SESS.countdown+"s");
+   for(let set=0; set<sets && Date.now()<endAt; set++){
+     let order=d.balls.map((_,i)=>i);
+     if(rnd)for(let k=order.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[order[k],order[j]]=[order[j],order[k]];}
+     for(let oi=0; oi<order.length; oi++){
+       await this._gate(); if(this._run!==run)return;
+       const ball=d.balls[order[oi]];
+       $("ballInfo").textContent=`balle ${oi+1}/${N}`+(sets!==Infinity&&sets>1?` (set ${set+1}/${sets})`:(timeMode?` (set ${set+1})`:""));
+       await fireBall(ball); if(this._run!==run)return;
+       if(BLE.verified) await BOT.waitReady(10000);
+       if($("calib").checked){ await this.awaitVerdict(ball); await sleep(300); }
+       else await sleep((ball.interval_s??3)*1000);
+       if(this._run!==run)return;
+     }
+     if((set+1<sets)&&(Date.now()<endAt)&&ci>0){ log("… pause entre sets "+ci+"s"); await sleep(ci*1000); if(this._run!==run)return; }
    }
    this.bi=0;
    log("Drill fini — pause "+(d.pause_after_s??0)+"s.");
@@ -437,6 +467,19 @@ const ENGINE={session:null,i:-1,bi:0,cur:null,state:"off",timer:null,paused:fals
  verdict(v){if(this._verdict)this._verdict(v);}
 };
 const sleep=ms=>new Promise(r=>{ENGINE.timer=setTimeout(r,ms);});
+
+/* ===== Réglages de séance (écran de lancement) — lus en direct depuis l'UI =====
+   Serve Mode (Time/Combo) + Sequence + Combo Interval gérés APP-SIDE (tir balle par
+   balle) ; Countdown = octet 0x08 du 0x81 (robot). cf. reverse/CALIBRATION.md. */
+const _n=(id,def)=>{const e=$(id);const v=e?parseFloat(e.value):NaN;return isNaN(v)?def:v;};
+const SESS={
+  get mode(){const e=$("sMode");return e?e.value:"combo";},
+  get sets(){return Math.max(1,Math.round(_n("sSets",1)));},
+  get minutes(){return Math.max(1,_n("sMin",10));},
+  get sequence(){const e=$("sSeq");return e?e.value:"sequential";},
+  get comboInterval(){return _cl(_n("sCombo",0),0,60);},
+  get countdown(){return _cl(Math.round(_n("sCd",3)),0,20);}
+};
 
 /* ===== SEAM : tir d'une balle (format d'octets à brancher après capture) ===== */
 // --- encodage trame 0x81 depuis les paramètres du drill (formule calibrée) ---
@@ -464,7 +507,8 @@ function buildFire(ball,position){
   const delta= Math.round(209*rot);
   const up=base+sens*delta, down=base-sens*delta;
   const angle=10+0.4*arc, yaw=1.7*drop+posOffset(position);
-  return [0x02,0x01,0x00,0x00, ..._f32(5.0), 0x03,
+  const cd=SESS.countdown, ci=SESS.comboInterval;   // 0x08 = countdown (s), 0x04 = combo interval (s)
+  return [0x02,0x01,0x00,0x00, ..._f32(ci), cd&0xff,
           ..._i32(up), ..._i32(down), ..._f32(angle), ..._f32(yaw), ..._f32(feed), ..._i32(1)];
 }
 async function fireBall(ball){
@@ -804,6 +848,8 @@ $("cfgLedPrep").onclick=()=>CFG.led("prep");
 $("cfgLedImm").onclick=()=>CFG.led("immersive");
 $("cfgDoor").onclick=()=>CFG.door();
 $("cfgRead").onclick=()=>CFG.read();
+$("btnSkip").onclick=()=>{ if(!BLE.verified){log("Connecte le robot d'abord.","warn");return;} BLE.send(0x80,[0x04]); log("⏭ Skip countdown (0x80·04)","ok"); };
+$("btnStopBot").onclick=()=>{ if(!BLE.verified){log("Connecte le robot d'abord.","warn");return;} BLE.send(0x80,[0x01]); log("⏹ Stop robot (0x80·01)","ok"); ENGINE.stop(); };
 $("btnCalibLoad").onclick=()=>loadCalib();
 $("btnGen").onclick=()=>genZoneDrill();
 function setMode(adv){document.body.classList.toggle("simple",!adv);
@@ -831,7 +877,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v3.0 · 2026-10-29";   // bump à chaque modif
+const APP_VERSION="v3.1 · 2026-10-29";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
