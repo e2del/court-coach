@@ -69,11 +69,11 @@
 
 <details class="card">
   <summary>⚙️ Réglages de séance</summary>
-  <label>Mode de lancement</label>
-  <select id="sMode"><option value="combo">Combo — nombre de sets</option><option value="time">Time — durée (minutes)</option></select>
   <div class="row">
-    <div style="flex:1"><label>Sets</label><input id="sSets" type="number" value="1" min="1" max="20"></div>
-    <div style="flex:1"><label>Minutes (mode Time)</label><input id="sMin" type="number" value="10" min="1" max="120"></div>
+    <div style="flex:1"><label>Mode de lancement</label>
+      <select id="sMode"><option value="combo">Combo (sets)</option><option value="time">Time (minutes)</option></select></div>
+    <div style="flex:1"><label id="sQtyLabel">Nombre de sets</label>
+      <input id="sQty" type="number" value="1" min="1" max="20"></div>
   </div>
   <label style="margin-top:8px">Séquence des balles</label>
   <select id="sSeq"><option value="sequential">Séquentiel</option><option value="random">Aléatoire</option></select>
@@ -474,8 +474,8 @@ const sleep=ms=>new Promise(r=>{ENGINE.timer=setTimeout(r,ms);});
 const _n=(id,def)=>{const e=$(id);const v=e?parseFloat(e.value):NaN;return isNaN(v)?def:v;};
 const SESS={
   get mode(){const e=$("sMode");return e?e.value:"combo";},
-  get sets(){return Math.max(1,Math.round(_n("sSets",1)));},
-  get minutes(){return Math.max(1,_n("sMin",10));},
+  get sets(){return Math.max(1,Math.round(_n("sQty",1)));},
+  get minutes(){return Math.max(1,_n("sQty",10));},
   get sequence(){const e=$("sSeq");return e?e.value:"sequential";},
   get comboInterval(){return _cl(_n("sCombo",0),0,60);},
   get countdown(){return _cl(Math.round(_n("sCd",3)),0,20);}
@@ -848,6 +848,10 @@ $("cfgLedPrep").onclick=()=>CFG.led("prep");
 $("cfgLedImm").onclick=()=>CFG.led("immersive");
 $("cfgDoor").onclick=()=>CFG.door();
 $("cfgRead").onclick=()=>CFG.read();
+function updateSessMode(){const m=$("sMode").value,lab=$("sQtyLabel"),q=$("sQty");
+  if(m==="time"){lab.textContent="Durée (minutes)";q.max="120";q.value="10";}
+  else{lab.textContent="Nombre de sets";q.max="20";q.value="1";}}
+$("sMode").onchange=updateSessMode;
 $("btnSkip").onclick=()=>{ if(!BLE.verified){log("Connecte le robot d'abord.","warn");return;} BLE.send(0x80,[0x04]); log("⏭ Skip countdown (0x80·04)","ok"); };
 $("btnStopBot").onclick=()=>{ if(!BLE.verified){log("Connecte le robot d'abord.","warn");return;} BLE.send(0x80,[0x01]); log("⏹ Stop robot (0x80·01)","ok"); ENGINE.stop(); };
 $("btnCalibLoad").onclick=()=>loadCalib();
@@ -877,7 +881,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v3.1 · 2026-10-29";   // bump à chaque modif
+const APP_VERSION="v3.2 · 2026-10-29";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
