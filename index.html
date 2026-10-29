@@ -402,6 +402,7 @@ const BOT={state:null,ready:true,serving:false,missing:false,_waiters:[],
 const ENGINE={session:null,i:-1,bi:0,cur:null,state:"off",timer:null,paused:false,_resume:null,_run:0,
  load(json){try{const s=typeof json==="string"?JSON.parse(json):json;
    if(!s.drills||!Array.isArray(s.drills))throw"pas de 'drills'";this.session=resolveSession(s);this.i=-1;this.bi=0;this.paused=false;
+   applySessionSettings(s);
    $("drillName").textContent=s.name||"Session";
    const sel=$("drillSel");
    if(sel)sel.innerHTML=s.drills.map((d,i)=>`<option value="${i}">Drill ${i+1}/${s.drills.length} — ${(d.name||("Drill "+(i+1)))}</option>`).join("");
@@ -646,6 +647,20 @@ function resolveSession(s){
   return {...s, drills:(s.drills||[]).map(d=>({...d,
     balls:(d.balls||[]).map(b=>resolveBall(b, posIndex(d.position ?? s.position ?? 0)))}))};
 }
+// Applique les réglages de séance fournis par le LLM dans le JSON (clé "settings"
+// au niveau séance) sur les champs de l'UI "Réglages de séance".
+function applySessionSettings(s){
+  const st=s&&s.settings; if(!st||typeof st!=="object")return;
+  const set=(id,v)=>{const e=$(id);if(e&&v!=null&&v!=="")e.value=String(v);};
+  if(st.mode){ const m=($("sMode")); if(m) m.value = st.mode==="time"?"time":"combo"; }
+  if(typeof updateSessMode==="function") updateSessMode();        // libellé + défaut
+  const qty = (st.mode==="time") ? st.minutes : st.sets;
+  if(qty!=null) set("sQty",qty);
+  if(st.sequence){ const e=$("sSeq"); if(e) e.value = st.sequence==="random"?"random":"sequential"; }
+  set("sCombo",st.comboInterval);
+  set("sCd",st.countdown);
+  log("⚙️ Réglages de séance appliqués (JSON): "+JSON.stringify(st),"ok");
+}
 
 /* ===== Hub (Firebase RTDB en REST, poll 1s) ===== */
 const HUB={url:"",tok:"",iv:null,lastCmd:"",
@@ -881,7 +896,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v3.2 · 2026-10-29";   // bump à chaque modif
+const APP_VERSION="v3.3 · 2026-10-29";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
