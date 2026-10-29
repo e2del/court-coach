@@ -87,6 +87,32 @@
   <div class="mut adv" id="ballTotal" style="margin-top:8px">🎾 balles tirées (à vie) : —</div>
 </div>
 
+<details class="card adv">
+  <summary>⚙️ Configuration du robot</summary>
+  <p class="mut">Réglages envoyés au robot (connexion requise). Mode / LED / porte sont relayés au MCU ; le buzzer est géré par l'ESP32.</p>
+  <label>Mode robot <span class="mut">(eco = silencieux ; eco plafonne peut-être la vitesse)</span></label>
+  <div class="row">
+    <button id="cfgEco" class="cfg" disabled>🔈 eco</button>
+    <button id="cfgSport" class="cfg" disabled>🔊 sport</button>
+  </div>
+  <label style="margin-top:8px">Buzzer</label>
+  <div class="row">
+    <button id="cfgBuzzOn" class="cfg" disabled>🔔 ON</button>
+    <button id="cfgBuzzOff" class="cfg" disabled>🔕 OFF</button>
+  </div>
+  <label style="margin-top:8px">LED de tête</label>
+  <div class="row">
+    <button id="cfgLedDef" class="cfg" disabled>Default</button>
+    <button id="cfgLedPrep" class="cfg" disabled>Early prep</button>
+    <button id="cfgLedImm" class="cfg" disabled>Immersive</button>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <button id="cfgDoor" class="cfg" disabled>🚪 Ouvrir la porte</button>
+    <button id="cfgRead" class="cfg" disabled>🔄 Lire l'état</button>
+  </div>
+  <div class="mut" id="cfgInfo" style="margin-top:8px">batterie : — · porte : —</div>
+</details>
+
 <div class="card">
   <label>Bibliothèque (dossiers d'entraînement)</label>
   <div id="library" class="mut">(vide — pousse une bibliothèque via le skill)</div>
@@ -283,6 +309,8 @@ const BLE={dev:null,wr:null,verified:false,rxbuf:[],
      else if(r.op===0x02)BOT.onStatus(r.data);      // machine d'état robot
      else if(r.op===0x13)BOT.onCountdown(r.data);   // compte à rebours de lancer
      else if(r.op===0x10)BOT.onBallTotal(r.data);    // compteur de balles à vie
+     else if(r.op===0x11)BOT.onBattery(r.data);      // batterie (pct + tension)
+     else if(r.op===0x12)BOT.onDoor(r.data);         // état porte (1=ouverte)
      if(!BOT.SAFE.has(r.op))BOT.checkCode(r);        // codes d'erreur (2006=plus de balle…)
    }
  },
@@ -292,8 +320,8 @@ const BLE={dev:null,wr:null,verified:false,rxbuf:[],
    const key=handshakeKey(sn,code);log("challenge sn="+sn+" → clé "+key.slice(0,8)+"…","ok");
    this.send(0x08,[...new TextEncoder().encode(key)]).then(()=>{this.verified=true;
      log("handshake envoyé ✔","ok");enableControls();
-     $("btnMotor").disabled=false;
-     this.send(0x10);});   // récupère le compteur de balles à vie
+     $("btnMotor").disabled=false;enableCfg();
+     this.send(0x10);this.send(0x11);this.send(0x12);});   // compteur balles + batterie + porte
  }catch(e){log("challenge illisible: "+e,"err");}}
 };
 
@@ -302,7 +330,7 @@ const BLE={dev:null,wr:null,verified:false,rxbuf:[],
    capturé en live : on le décode au mieux en tête des données, et seulement sur les
    trames non-getter (SAFE) pour éviter les faux positifs. */
 const BOT={state:null,ready:true,serving:false,missing:false,_waiters:[],
- SAFE:new Set([0x01,0x02,0x03,0x07,0x10,0x11,0x13,0x15,0x24]), // getters décodés = pas d'erreur
+ SAFE:new Set([0x01,0x02,0x03,0x07,0x10,0x11,0x12,0x13,0x15,0x24]), // getters décodés = pas d'erreur
  LABEL:{0:"init",2:"veille",3:"prêt",4:"tir en cours",5:"fin de cycle",6:"pause",
         7:"sommeil",8:"déclenchement",9:"avertissement",11:"erreur"},
  CODES:{2006:"plus de balle",2008:"batterie faible",2014:"erreur (#1007)",4014:"erreur au démarrage"},
@@ -325,6 +353,14 @@ const BOT={state:null,ready:true,serving:false,missing:false,_waiters:[],
  onBallTotal(d){ if(d.length<4)return; const n=(d[0]|d[1]<<8|d[2]<<16|d[3]<<24)>>>0;
    this.ballTotal=n; const e=$("ballTotal");
    if(e)e.textContent="🎾 balles tirées (à vie) : "+n.toLocaleString("fr-FR"); },
+ onBattery(d){ if(!d||d.length<1)return; const pct=d[0]; let v=null;
+   if(d.length>=5){try{v=new DataView(Uint8Array.from(d.slice(1,5)).buffer).getFloat32(0,true);}catch(e){}}
+   this.batt={pct,v}; this._cfgInfo(); },
+ onDoor(d){ if(!d||d.length<1)return; this.doorOpen=d[0]; this._cfgInfo(); },
+ _cfgInfo(){ const e=$("cfgInfo"); if(!e)return;
+   const b=this.batt?(this.batt.pct+"%"+(this.batt.v?" ("+this.batt.v.toFixed(1)+" V)":"")):"—";
+   const d=(this.doorOpen==null)?"—":(this.doorOpen?"ouverte":"fermée");
+   e.textContent="batterie : "+b+" · porte : "+d; },
  // Attend que le robot soit PRÊT (état 3). Résolu par notif ; timeout => false (jamais bloqué).
  waitReady(ms=8000){ if(this.ready&&!this.serving)return Promise.resolve(true);
    return new Promise(res=>{let done=false;const f=ok=>{if(done)return;done=true;res(ok);};
@@ -456,6 +492,25 @@ async function motorOn(){
     else log("commande envoyée (pas de retour « prêt » en 8 s, état "+BOT.state+").","warn");
   }catch(e){ log("⚠️ Moteur ON échoué : "+e,"err"); }
 }
+
+/* ===== Configuration du robot (trames reversées — cf. reverse/FW_HANDLERS.md) =====
+   0x55 mode (01=eco/00=sport, →MCU) · 0x58 buzzer (01/00, ESP32 NVS) ·
+   0x4a LED (Default 0100 / EarlyPrep 0101 / Immersive 0002, →MCU) · 0x44 porte (→MCU) ·
+   lectures 0x11 batterie, 0x12 porte, 0x10 compteur balles. */
+const CFG={
+  LED:{default:[0x01,0x00],prep:[0x01,0x01],immersive:[0x00,0x02]},
+  async _s(op,data,label){ if(!BLE.verified){log("Connecte le robot d'abord.","warn");return;}
+    try{ await BLE.send(op,data);
+      log("⚙️ "+label+" (0x"+op.toString(16)+(data.length?" "+data.map(b=>b.toString(16).padStart(2,"0")).join(""):"")+")","ok"); }
+    catch(e){ log("⚙️ "+label+" échoué : "+e,"err"); } },
+  mode(eco){ return this._s(0x55,[eco?0x01:0x00],"Mode "+(eco?"eco":"sport")); },
+  buzzer(on){ return this._s(0x58,[on?0x01:0x00],"Buzzer "+(on?"ON":"OFF")); },
+  led(name){ return this._s(0x4a,this.LED[name]||this.LED.default,"LED "+name); },
+  door(){ if(!confirm("Ouvrir la porte du robot ?"))return; return this._s(0x44,[],"Ouvrir la porte"); },
+  read(){ if(!BLE.verified){log("Connecte le robot d'abord.","warn");return;}
+    log("🔄 lecture état robot…"); BLE.send(0x11); BLE.send(0x12); BLE.send(0x10); }
+};
+function enableCfg(){ document.querySelectorAll(".cfg").forEach(b=>b.disabled=false); }
 // --- Chercheur de frontières : génère des balles qui ENCADRENT les lignes prédites
 //     par le modèle (fond / côtés / filet). On ne teste que la bande incertaine. ---
 function _scanCross(base,key,lo,hi,step,valFn,target,pos){
@@ -740,6 +795,15 @@ $("btnNext").onclick=()=>ENGINE.nextDrill();
 $("drillSel").onchange=()=>ENGINE.select(parseInt($("drillSel").value,10));
 $("btnStop").onclick=()=>ENGINE.stop();
 $("btnMotor").onclick=()=>motorOn();
+$("cfgEco").onclick=()=>CFG.mode(true);
+$("cfgSport").onclick=()=>CFG.mode(false);
+$("cfgBuzzOn").onclick=()=>CFG.buzzer(true);
+$("cfgBuzzOff").onclick=()=>CFG.buzzer(false);
+$("cfgLedDef").onclick=()=>CFG.led("default");
+$("cfgLedPrep").onclick=()=>CFG.led("prep");
+$("cfgLedImm").onclick=()=>CFG.led("immersive");
+$("cfgDoor").onclick=()=>CFG.door();
+$("cfgRead").onclick=()=>CFG.read();
 $("btnCalibLoad").onclick=()=>loadCalib();
 $("btnGen").onclick=()=>genZoneDrill();
 function setMode(adv){document.body.classList.toggle("simple",!adv);
@@ -767,7 +831,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v2.9 · 2026-10-28";   // bump à chaque modif
+const APP_VERSION="v3.0 · 2026-10-29";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
