@@ -44,7 +44,39 @@
 </head>
 <body>
 <h1>🎾 Court Coach <span id="state" class="pill s-off">déconnecté</span><span id="ver" class="ver"></span></h1>
-<div class="row" style="margin:-6px 0 10px"><button id="btnMode">⚙️ Mode avancé</button></div>
+<div class="row" style="margin:-6px 0 10px"><button id="btnQuick">🎛 Exo rapide</button><button id="btnMode">⚙️ Mode avancé</button></div>
+
+<div class="card" id="quickPanel" style="display:none">
+  <div class="mut" style="margin-bottom:8px">Compose un exercice et charge-le direct dans le moteur. L'aperçu dit s'il tombe dans le terrain. (Mode/séquence/countdown = « Réglages de séance ».)</div>
+  <label>Nom</label>
+  <input id="q-name" value="Exo rapide" autocomplete="off">
+  <div class="row" style="margin-top:8px">
+    <div style="flex:1"><label>Vitesse (2–7)</label><input id="q-speed" type="number" value="6" min="0" max="13" step="0.5" inputmode="decimal"></div>
+    <div style="flex:1"><label>Profondeur (20–45)</label><input id="q-arc" type="number" value="35" min="0" max="99" inputmode="numeric"></div>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <div style="flex:1"><label>Effet</label><select id="q-spin"><option value="topspin">Lift</option><option value="flat">À plat</option><option value="backspin">Coupé</option></select></div>
+    <div style="flex:1"><label>Intensité (0–7)</label><input id="q-rot" type="number" value="4" min="0" max="8" inputmode="numeric"></div>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <div style="flex:1"><label>Placement</label><select id="q-side">
+      <option value="0">Centre</option>
+      <option value="5">Coup droit (+5)</option>
+      <option value="-5">Revers (−5)</option>
+      <option value="5,-5" selected>Alterné CD/RV (±5)</option>
+      <option value="6,-6">Alterné large (±6)</option>
+      <option value="3,-3">Léger CD/RV (±3)</option>
+    </select></div>
+    <div style="flex:1"><label>Intervalle (s)</label><input id="q-int" type="number" value="3.5" min="1.5" max="12" step="0.5" inputmode="decimal"></div>
+  </div>
+  <div class="row" style="margin-top:8px">
+    <div style="flex:1"><label>Nb de balles</label><input id="q-n" type="number" value="10" min="1" max="30" inputmode="numeric"></div>
+  </div>
+  <div class="mut" id="q-verdict" style="margin-top:10px;font-size:13px">—</div>
+  <div class="row" style="margin-top:10px">
+    <button id="q-load" class="primary">Charger l'exo</button>
+  </div>
+</div>
 
 <div class="card">
   <div class="big-status" id="drillName">—</div>
@@ -608,6 +640,36 @@ function genZoneDrill(){
   log("Drill généré ("+n+" balles) : "+info, r.ok?"ok":"warn");
 }
 
+/* ===== Exo rapide (télécommande intégrée) : compose des balles et charge dans le moteur ===== */
+function quickBalls(){
+  const speed=+$("q-speed").value, arc=+$("q-arc").value, spin=$("q-spin").value,
+        rot=+$("q-rot").value, iv=+$("q-int").value, n=Math.max(1,Math.min(30,parseInt($("q-n").value,10)||8));
+  const drops=($("q-side").value||"0").split(",").map(x=>parseFloat(x)||0);
+  const name=$("q-name").value.trim()||"Exo rapide";
+  const balls=[];
+  for(let i=0;i<n;i++)balls.push({speed,arc,spin,rotationSpeed:rot,dropPoint:drops[i%drops.length],interval_s:iv,tag:name});
+  return {name,balls,drops,speed,arc,rot,spin};
+}
+function quickVerdict(){
+  const q=quickBalls(); let anyFault=false;
+  const txt=[...new Set(q.drops)].map(d=>{
+    const s=simOne({speed:q.speed,arc:q.arc,spin:q.spin,rotationSpeed:q.rot,dropPoint:d},posIndex("center"));
+    let v; if(s.out){v="❌ "+s.out;anyFault=true;} else if(s.lowNet)v="⚠️ rase filet"; else v="✅";
+    return `drop ${d>0?"+":""}${d} : ${v} (${s.depth.toFixed(1)} m)`;
+  }).join("  ·  ");
+  const e=$("q-verdict"); if(e){e.textContent=txt; e.style.color=anyFault?"var(--bad,#ff6b6b)":"";}
+  return !anyFault;
+}
+function quickLoad(){
+  const q=quickBalls();
+  if(!quickVerdict() && !confirm("Une balle sort du terrain (selon le modèle). Charger quand même ?"))return;
+  const sess={name:q.name,position:"center",drills:[{name:q.name,pause_after_s:15,balls:q.balls}]};
+  $("drills").value=JSON.stringify(sess,null,1);
+  ENGINE.load(sess);
+  log("🎛 Exo rapide chargé ("+q.balls.length+" balles) — ▶︎ Lancer.","ok");
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
 // --- SOLVEUR INVERSE : zone + type de coup -> paramètres machine (via le modèle) ---
 // Recherche dichotomique sur une grandeur MONOTONE croissante.
 function _solveMono(fn,lo,hi,target){let a=lo,b=hi;for(let k=0;k<28;k++){const m=(a+b)/2;(fn(m)<target)?a=m:b=m;}return (a+b)/2;}
@@ -871,6 +933,10 @@ $("btnSkip").onclick=()=>{ if(!BLE.verified){log("Connecte le robot d'abord.","w
 $("btnStopBot").onclick=()=>{ if(!BLE.verified){log("Connecte le robot d'abord.","warn");return;} BLE.send(0x80,[0x01]); log("⏹ Stop robot (0x80·01)","ok"); ENGINE.stop(); };
 $("btnCalibLoad").onclick=()=>loadCalib();
 $("btnGen").onclick=()=>genZoneDrill();
+$("btnQuick").onclick=()=>{const p=$("quickPanel");const show=p.style.display==="none"||!p.style.display;
+  p.style.display=show?"block":"none"; $("btnQuick").textContent=show?"🎛 Masquer":"🎛 Exo rapide"; if(show){quickVerdict();window.scrollTo({top:0,behavior:"smooth"});}};
+["q-name","q-speed","q-arc","q-spin","q-rot","q-side","q-int","q-n"].forEach(id=>{const e=$(id);if(e){e.addEventListener("input",quickVerdict);e.addEventListener("change",quickVerdict);}});
+$("q-load").onclick=()=>quickLoad();
 function setMode(adv){document.body.classList.toggle("simple",!adv);
   const b=$("btnMode");if(b)b.textContent=adv?"⬅︎ Mode simple":"⚙️ Mode avancé";
   try{localStorage.setItem("cc_mode",adv?"adv":"simple");}catch(e){}}
@@ -896,7 +962,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v3.3 · 2026-10-29";   // bump à chaque modif
+const APP_VERSION="v3.4 · 2026-10-30";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
