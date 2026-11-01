@@ -468,19 +468,17 @@ const ENGINE={session:null,i:-1,bi:0,cur:null,state:"off",timer:null,paused:fals
  async playDrill(d){const run=++this._run;setState("playing");this.paused=false;
    $("drillName").textContent=d.name||("Drill "+(this.i+1));
    renderCourt(d,d.name||("Drill "+(this.i+1)));
-   const timeMode=SESS.mode==="time";
-   const sets=timeMode?Infinity:Math.max(1,SESS.sets);
-   const endAt=timeMode?Date.now()+SESS.minutes*60000:Infinity;
-   const ci=SESS.comboInterval, rnd=SESS.sequence==="random", N=d.balls.length;
+   const timeMode=SESS.mode==="time", rnd=SESS.sequence==="random", N=d.balls.length;
    const calib=$("calib").checked;
    const position = d.position || (this.session&&this.session.position) || null;
-   log("▶︎ "+(timeMode?("Time "+SESS.minutes+" min"):("Combo "+sets+" set(s)"))+
+   log("▶︎ "+(timeMode?("Time "+SESS.minutes+" min"):("Combo "+SESS.sets+" set(s)"))+
        " · "+(rnd?"aléatoire":"séquentiel")+(calib?" · calibration (balle par balle)":" · tir groupé (robot cadence)"));
-   for(let set=0; set<sets && Date.now()<endAt; set++){
-     let order=d.balls.map((_,i)=>i);
-     if(rnd)for(let k=order.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[order[k],order[j]]=[order[j],order[k]];}
-     if(calib){
-       // --- CALIBRATION : balle par balle, verdict après chaque ---
+   if(calib){
+     // --- CALIBRATION : balle par balle, verdict après chaque (app-side sets/aléatoire) ---
+     const sets=timeMode?Infinity:Math.max(1,SESS.sets), endAt=timeMode?Date.now()+SESS.minutes*60000:Infinity, ci=SESS.comboInterval;
+     for(let set=0; set<sets && Date.now()<endAt; set++){
+       let order=d.balls.map((_,i)=>i);
+       if(rnd)for(let k=order.length-1;k>0;k--){const j=Math.floor(Math.random()*(k+1));[order[k],order[j]]=[order[j],order[k]];}
        for(let oi=0; oi<order.length; oi++){
          await this._gate(); if(this._run!==run)return;
          const ball=d.balls[order[oi]];
@@ -490,12 +488,12 @@ const ENGINE={session:null,i:-1,bi:0,cur:null,state:"off",timer:null,paused:fals
          await this.awaitVerdict(ball); await sleep(300);
          if(this._run!==run)return;
        }
-     }else{
-       // --- NORMAL : toute la série en UN envoi, le robot cadence via feed ---
-       $("ballInfo").textContent=`série ${set+1}${sets!==Infinity?"/"+(sets===Infinity?"∞":sets):""} — ${N} balles`;
-       await fireMulti(order.map(i=>d.balls[i]), position, run); if(this._run!==run)return;
+       if((set+1<sets)&&(Date.now()<endAt)&&ci>0){ await sleep(ci*1000); if(this._run!==run)return; }
      }
-     if((set+1<sets)&&(Date.now()<endAt)&&ci>0){ log("… pause entre sets "+ci+"s"); await sleep(ci*1000); if(this._run!==run)return; }
+   }else{
+     // --- NORMAL : toute la séance en UN seul 0x81 ; le robot gère sets/durée/aléatoire ---
+     $("ballInfo").textContent=`série — ${N} balle(s)`+(timeMode?` · ${SESS.minutes} min`:(SESS.sets>1?` · ${SESS.sets} sets`:""));
+     await fireMulti(d.balls, position, run); if(this._run!==run)return;
    }
    this.bi=0;
    log("Drill fini — pause "+(d.pause_after_s??0)+"s.");
@@ -556,17 +554,22 @@ function ballBlock(ball,position){
   const angle=10+0.4*arc, yaw=1.7*drop+posOffset(position);
   return [..._i32(up), ..._i32(down), ..._f32(angle), ..._f32(yaw), ..._f32(feed), ..._i32(1)];
 }
-// en-tête 9 o : [mode, qty, 00, seq, f32 comboInterval, countdown]
-function fireHeader(mode,qty){
+// en-tête 9 o : [mode, qty, 00, seq, f32 comboInterval, countdown]  (cf. captures E/G-todo)
+function fireHeader(mode,qty,seq){
   const cd=SESS.countdown, ci=SESS.comboInterval;
-  return [mode&0xff, qty&0xff, 0x00, 0x00, ..._f32(ci), cd&0xff];
+  return [mode&0xff, qty&0xff, 0x00, seq&0xff, ..._f32(ci), cd&0xff];
 }
 // 1 balle (mode Ball Test) — utilisé en calibration (verdict par balle).
-function buildFire(ball,position){ return [...fireHeader(0x02,1), ...ballBlock(ball,position)]; }
-// SÉRIE : en-tête une fois (mode Combo, 1 passage) + N blocs. Le robot enchaîne tout
-// seul au rythme de `feed` → cadence rapide ET plus besoin de communiquer pendant la série.
+function buildFire(ball,position){ return [...fireHeader(0x02,1,0), ...ballBlock(ball,position)]; }
+// SÉRIE : en-tête une fois + N blocs, puis le ROBOT gère tout seul sets/durée/aléatoire
+// et cadence les balles via `feed`. Structure identique aux captures réelles E (Time) et
+// G-todo (Combo). Mode/qty/seq viennent des « Réglages de séance ».
 function buildFireMulti(balls,position){
-  let out=[...fireHeader(0x01,1)];
+  const timeMode=SESS.mode==="time";
+  const mode=timeMode?0x00:0x01;                                  // 0=Time, 1=Combo
+  const qty=Math.min(255,Math.max(1, timeMode?Math.round(SESS.minutes):SESS.sets));
+  const seq=SESS.sequence==="random"?1:0;
+  let out=[...fireHeader(mode,qty,seq)];
   for(const b of balls) out.push(...ballBlock(b, b.position||position));
   return out;
 }
@@ -580,8 +583,11 @@ async function fireMulti(balls,position,run){
   BOT.serving=true; BOT.missing=false;
   try{ await BLE.send(0x81,bytes); }
   catch(e){ log("⚠️ Envoi série échoué (BLE): "+e,"err"); ENGINE.pause(); return; }
-  const feeds=balls.reduce((a,b)=>a+_cl(Number(b.interval_s)||3,1.5,12),0);
-  const maxMs=(SESS.countdown+5)*1000 + feeds*1000 + 8000;   // startup + feeds + marge
+  const perPass=balls.reduce((a,b)=>a+_cl(Number(b.interval_s)||3,1.5,12),0);
+  const timeMode=SESS.mode==="time";
+  const maxMs = timeMode
+      ? (SESS.minutes*60000 + 15000)
+      : ((SESS.countdown+5)*1000 + perPass*Math.max(1,SESS.sets)*1000 + SESS.comboInterval*1000*Math.max(0,SESS.sets-1) + 10000);
   let started=false; const t0=Date.now();
   while(Date.now()-t0<maxMs){
     if(ENGINE._run!==run) return;                                  // stop / drill suivant
@@ -1010,7 +1016,7 @@ $("drills").value=JSON.stringify({name:"Séance demo",drills:[
  {name:"Revers lifté",repeat:2,pause_after_s:20,balls:[
    {speed:6,arc:35,spin:"topspin",rotationSpeed:3,dropPoint:-6,interval_s:2.5,tag:"backhand"}]}
 ]},null,2);
-const APP_VERSION="v3.5 · 2026-11-01";   // bump à chaque modif
+const APP_VERSION="v3.6 · 2026-11-01";   // bump à chaque modif
 $("ver").textContent=APP_VERSION;
 LOG.load(); LOG.render();
 log("───── session "+new Date().toLocaleString()+" ─────");
